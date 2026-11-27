@@ -12,6 +12,19 @@ def is_usable_name(name: str) -> bool:
     return is_gamertag(name) and name == name.strip(" ")
 
 
+def initial(name: str) -> str:
+    """The first letter or digit of a name, for an avatar circle."""
+    for char in name:
+        if char.isascii() and char.isalnum():
+            return char.upper()
+    return "?"
+
+
+def avatar_class(name: str) -> str:
+    """One of eight colour classes, the same for a given name every time."""
+    return f"h{sum(name.encode('utf-8')) % 8}"
+
+
 def local_time(moment: datetime, tz: ZoneInfo) -> str:
     local = moment.astimezone(tz)
     return f"{local:%a} {int(f'{local:%I}')}:{local:%M} {local:%p}"

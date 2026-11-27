@@ -30,7 +30,7 @@ Imports only point downward through this list, and the two feature slices do not
 - Configuration is read once, at boot, in `shared/config.py`. Nothing else reads the environment or secret files.
 - Domain errors are typed (`shared/errors.py`) and mapped to HTTP responses only in `api/errors.py`.
 - Logs are JSON lines carrying a per-request correlation id.
-- Visible text is written for a ten-year-old: short, friendly, no jargon and no em dashes.
+- Visible text is written for a child: short, friendly, no jargon and no em dashes.
 - Everything shown from `status.json` or a result file is untrusted and must go through the template's autoescaping.
 
 ## Decisions

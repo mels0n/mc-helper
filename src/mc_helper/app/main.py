@@ -10,7 +10,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from mc_helper import api as api_package
-from mc_helper.api import RequestContextMiddleware, Services, install_error_handlers, router
+from mc_helper.api import (
+    RequestContextMiddleware,
+    Services,
+    configure_templates,
+    install_error_handlers,
+    router,
+)
 from mc_helper.features.auth import AuthService, LoginLimiter, PinVerifier, SessionCodec
 from mc_helper.features.control import ControlService, ControlStore
 from mc_helper.shared.clientip import parse_networks
@@ -42,12 +48,16 @@ def create_app(
         settings.session_days,
     )
 
+    templates = Jinja2Templates(directory=api_dir / "templates")
+    static_versions = configure_templates(templates, settings, api_dir / "static")
+
     app = FastAPI(title="mc-helper", docs_url=None, redoc_url=None, openapi_url=None)
+    app.state.static_versions = static_versions
     app.state.services = Services(
         settings=settings,
         control=control,
         auth=auth,
-        templates=Jinja2Templates(directory=api_dir / "templates"),
+        templates=templates,
         trusted=parse_networks(settings.trusted_proxies),
         timezone=ZoneInfo(settings.display_timezone),
     )

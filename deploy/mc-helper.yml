@@ -13,6 +13,9 @@ services:
       TRUSTED_PROXIES: <proxy-network-subnet>
       COOKIE_SECURE: "true"
       DISPLAY_TIMEZONE: America/Chicago
+      SERVER_ADDRESS: <game-address>
+      BROADCAST_GAMERTAG: <broadcast-gamertag>
+      SERVER_DISPLAY_NAME: <display-name>
     secrets:
       - mch_pin
       - mch_session_secret

@@ -68,6 +68,9 @@ def make_settings(tmp_path: Path, control_dir: Path) -> Callable[..., Settings]:
             "cookie_secure": False,
             "result_timeout_seconds": 0.3,
             "result_poll_seconds": 0.02,
+            "server_address": "play.example.org",
+            "broadcast_gamertag": "ServerFriend",
+            "server_display_name": "ExampleServer",
         }
         values.update(overrides)
         return Settings(**values)  # pyright: ignore[reportArgumentType]

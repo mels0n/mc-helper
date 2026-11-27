@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}How to join {{ server_name }}{% endblock %}
+{% block bodyclass %}print-page{% endblock %}
+{% block body %}
+<p class="noprint printbar">
+  <a class="button-link quiet" href="/friends-guide">Back to the guide</a>
+  <button type="button" class="small go" data-print hidden>Print this page</button>
+</p>
+<div class="guide-head">
+  <h1>How to join {{ server_name }}</h1>
+  <p class="lead">A Minecraft server for friends. Here is how to get on it.</p>
+</div>
+{% include "_guide_content.html" %}
+{% endblock %}

@@ -1,6 +1,7 @@
 """Boot-validated settings. The only module that reads environment variables or secret files."""
 
 import ipaddress
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Self
@@ -9,8 +10,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import Field, PrivateAttr, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from mc_helper.shared.gamertag import is_exact_gamertag
+
 PIN_MIN_LENGTH = 4
 SESSION_SECRET_MIN_LENGTH = 32
+MAX_HOST_LENGTH = 253
+MAX_LABEL_LENGTH = 40
+_DNS_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
 
 
 def _read_secret_file(path: Path, what: str) -> str:
@@ -45,6 +51,14 @@ class Settings(BaseSettings):
     requested_by: str = Field(default="mc-helper", pattern=r"^[A-Za-z0-9._-]{1,64}$")
     display_timezone: str = "America/Chicago"
     log_level: str = "INFO"
+    # Shown on the friends guide and in page titles. All three are required: the deployment
+    # supplies them, nothing about a particular server is built into the code.
+    server_address: str
+    server_port: int = Field(default=19132, ge=1, le=65535)
+    broadcast_gamertag: str
+    server_display_name: str
+    # What the page calls the grown-up to ask when something is out of the child's hands.
+    helper_name: str = "a grown-up"
 
     # Read only from their files; deliberately not env-settable fields.
     _pin: SecretStr = PrivateAttr()
@@ -82,6 +96,32 @@ class Settings(BaseSettings):
             ZoneInfo(value)
         except (ZoneInfoNotFoundError, ValueError):
             raise ValueError("display_timezone is not a known time zone") from None
+        return value
+
+    @field_validator("server_address")
+    @classmethod
+    def _check_address(cls, value: str) -> str:
+        labels = value.split(".")
+        if len(value) > MAX_HOST_LENGTH or not all(_DNS_LABEL.fullmatch(x) for x in labels):
+            raise ValueError("server_address must be a host name made of valid DNS labels")
+        return value
+
+    @field_validator("broadcast_gamertag")
+    @classmethod
+    def _check_gamertag(cls, value: str) -> str:
+        if not is_exact_gamertag(value):
+            raise ValueError("broadcast_gamertag must be a valid gamertag without edge spaces")
+        return value
+
+    @field_validator("server_display_name", "helper_name")
+    @classmethod
+    def _check_label(cls, value: str) -> str:
+        if (
+            not 1 <= len(value) <= MAX_LABEL_LENGTH
+            or value != value.strip()
+            or not value.isprintable()
+        ):
+            raise ValueError("must be 1 to 40 printable characters with no edge spaces")
         return value
 
     @field_validator("log_level")

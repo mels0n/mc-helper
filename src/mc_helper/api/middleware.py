@@ -2,6 +2,7 @@
 
 import logging
 import time
+from typing import cast
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
@@ -17,7 +18,7 @@ CSP = (
 )
 
 
-def apply_headers(response: Response, request_id: str, path: str) -> None:
+def apply_headers(response: Response, request_id: str, path: str, versioned: bool = False) -> None:
     """Headers every response carries, including the ones for an unhandled error."""
     response.headers["X-Request-ID"] = request_id
     response.headers["Content-Security-Policy"] = CSP
@@ -26,6 +27,20 @@ def apply_headers(response: Response, request_id: str, path: str) -> None:
     response.headers["X-Frame-Options"] = "DENY"
     if not path.startswith("/static/"):
         response.headers["Cache-Control"] = "no-store"
+    elif versioned:
+        # The URL carries a content hash, so a changed file is always a new URL.
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    else:
+        response.headers["Cache-Control"] = "no-cache"
+
+
+def _current_version(request: Request, response: Response) -> bool:
+    """True only for a successful static response whose ?v= is the file's current hash."""
+    if response.status_code != 200 or not request.url.path.startswith("/static/"):
+        return False
+    versions = cast("dict[str, str]", getattr(request.app.state, "static_versions", {}))
+    name = request.url.path.removeprefix("/static/")
+    return request.query_params.get("v") == versions.get(name)
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -38,7 +53,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         finally:
             request_id_var.reset(token)
-        apply_headers(response, request_id, request.url.path)
+        apply_headers(response, request_id, request.url.path, _current_version(request, response))
         log.info(
             "request",
             extra={

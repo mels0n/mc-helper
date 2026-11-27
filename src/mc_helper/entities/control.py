@@ -4,7 +4,6 @@ The argument rules here are identical to the supervisor's. They are the only pla
 those rules are written down in this app.
 """
 
-import re
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -21,9 +20,9 @@ from pydantic import (
 )
 
 from mc_helper.shared.errors import InvalidInput
+from mc_helper.shared.gamertag import GAMERTAG_RE as GAMERTAG_RE  # re-exported
+from mc_helper.shared.gamertag import is_gamertag as is_gamertag  # re-exported
 
-# At least one letter or digit, like the supervisor: a name of only spaces is not a name.
-GAMERTAG_RE = re.compile(r"(?= *[A-Za-z0-9])[A-Za-z0-9 ]{1,16}")
 TIMES = ("day", "noon", "night", "midnight")
 WEATHERS = ("clear", "rain", "thunder")
 MESSAGE_MAX = 300
@@ -39,10 +38,6 @@ class Action(StrEnum):
     SET_TIME = "set_time"
     SET_WEATHER = "set_weather"
     SET_SPAWN_HERE = "set_spawn_here"
-
-
-def is_gamertag(value: str) -> bool:
-    return GAMERTAG_RE.fullmatch(value) is not None
 
 
 def parse_request_id(value: str) -> str:

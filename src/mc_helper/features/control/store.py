@@ -105,9 +105,7 @@ class ControlStore:
         except OSError:
             with contextlib.suppress(OSError):
                 temp.unlink()
-            raise ControlUnavailable(
-                "I can't reach the server controls right now. Tell Dad."
-            ) from None
+            raise ControlUnavailable("I can't reach the server controls right now.") from None
 
     def read_result(self, request_id: str) -> ActionResult | None:
         name = parse_request_id(request_id)

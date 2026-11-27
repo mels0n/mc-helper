@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Get your friends playing | {{ server_name }}{% endblock %}
+{% block header %}{% with page="guide" %}{% include "_nav.html" %}{% endwith %}{% endblock %}
+{% block body %}
+<div class="guide-head">
+  <h1>Get your friends playing</h1>
+  <p class="lead">Follow these steps for each friend. Every device is a little different.</p>
+  <p class="actions noprint">
+    <a class="button-link" href="/friends-guide/print">Print or share</a>
+  </p>
+</div>
+{% include "_guide_content.html" %}
+{% endblock %}

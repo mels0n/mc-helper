@@ -1,0 +1,95 @@
+<section class="card details" aria-labelledby="g-details">
+  <h2 id="g-details">Join {{ server_name }}</h2>
+  <dl class="facts">
+    <div><dt>Server name</dt><dd>{{ server_name }}</dd></div>
+    <div><dt>Server address</dt><dd><code>{{ address }}</code> <button type="button" class="small quiet copy noprint" data-copy="{{ address }}" hidden>Copy</button></dd></div>
+    <div><dt>Port</dt><dd><code>{{ port }}</code></dd></div>
+    <div><dt>Friend to add on consoles</dt><dd><code>{{ broadcast }}</code> <button type="button" class="small quiet copy noprint" data-copy="{{ broadcast }}" hidden>Copy</button></dd></div>
+  </dl>
+</section>
+
+<nav class="chips noprint" aria-label="Jump to a part of the guide">
+  <a href="#g-start">Start here</a>
+  <a href="#g-console">Switch, Xbox, PlayStation</a>
+  <a href="#g-other">Phone, tablet, computer</a>
+  <a href="#g-parents">For parents</a>
+  <a href="#g-trouble">Trouble?</a>
+</nav>
+
+<section class="card" id="g-start" aria-labelledby="g-start-title">
+  <p class="step">Step 1 for everyone</p>
+  <h2 id="g-start-title">Get ready</h2>
+  <ol class="steps">
+    <li>
+      <strong>Install Minecraft.</strong>
+      Use Minecraft (Bedrock Edition), the one on Switch, phones, tablets, Windows, Xbox and PlayStation. Sign in with a free Microsoft account. Your Xbox gamertag is your name in the game.
+    </li>
+    <li>
+      <strong>Send your gamertag to the person who runs this server.</strong>
+      They add you to the friends list. Only people on the list can join.
+    </li>
+    <li>
+      <strong>Check your device.</strong>
+      Mac computers and Minecraft Java Edition cannot join this server.
+    </li>
+  </ol>
+</section>
+
+<section class="card" id="g-console" aria-labelledby="g-console-title">
+  <p class="step">Step 2</p>
+  <h2 id="g-console-title">Nintendo Switch, Switch 2, Xbox and PlayStation</h2>
+  <p class="hint">Consoles cannot type in a server address, so the server shows up in your Friends tab instead.</p>
+  <ol class="steps">
+    <li>On a Switch or Switch 2, you need Nintendo Switch Online to play online.</li>
+    <li>Open Minecraft and choose <strong>Play</strong>, then <strong>Friends</strong>, then <strong>Add Friend</strong>.</li>
+    <li>Search for <strong>{{ broadcast }}</strong> and send a friend request.</li>
+    <li>Wait about a minute. The server appears under the Friends tab as a joinable cross-platform friend.</li>
+    <li>Tap it, then choose <strong>Join</strong>.</li>
+  </ol>
+  <p class="hint">Xbox and PlayStation use the same steps as the Switch.</p>
+</section>
+
+<section class="card" id="g-other" aria-labelledby="g-other-title">
+  <p class="step">Step 2</p>
+  <h2 id="g-other-title">iPhone, iPad, Android, Windows PC and Chromebook</h2>
+  <ol class="steps">
+    <li>Open Minecraft and choose <strong>Play</strong>, then <strong>Servers</strong>.</li>
+    <li>Scroll down and choose <strong>Add Server</strong>.</li>
+    <li>
+      Fill in the boxes:
+      <ul class="fill">
+        <li>Server Name: anything you like</li>
+        <li>Server Address: <code>{{ address }}</code></li>
+        <li>Port: <code>{{ port }}</code></li>
+      </ul>
+    </li>
+    <li>Choose <strong>Save</strong>, then tap the server to join.</li>
+  </ol>
+  <p class="hint">The Friends tab way (add <strong>{{ broadcast }}</strong> as a friend) works on these devices too.</p>
+</section>
+
+<section class="card" id="g-parents" aria-labelledby="g-parents-title">
+  <p class="step">For parents</p>
+  <h2 id="g-parents-title">Quick checklist</h2>
+  <ul class="checks">
+    <li>In the Microsoft family settings for the child account (family.microsoft.com or the Xbox Family Settings app), allow <strong>join multiplayer games</strong>.</li>
+    <li>Allow <strong>play with people outside of Xbox</strong> (cross-network play).</li>
+    <li>Allow <strong>adding friends</strong>.</li>
+    <li>On Nintendo, parental controls must allow <strong>communicating with others</strong> for Minecraft.</li>
+    <li>A Switch needs a Nintendo Switch Online membership to play online.</li>
+    <li>Changes to Microsoft settings can take a few hours to apply.</li>
+  </ul>
+</section>
+
+<section class="card" id="g-trouble" aria-labelledby="g-trouble-title">
+  <p class="step">Stuck?</p>
+  <h2 id="g-trouble-title">Troubleshooting</h2>
+  <dl class="trouble">
+    <dt>It says I am not on the friends list</dt>
+    <dd>Ask the person who runs the server to add your gamertag.</dd>
+    <dt>I cannot connect</dt>
+    <dd>Ask a parent to check the family settings in the checklist above.</dd>
+    <dt>The server does not show in my Friends tab</dt>
+    <dd>Make sure the <strong>{{ broadcast }}</strong> friend request was accepted, then close Minecraft and open it again.</dd>
+  </dl>
+</section>

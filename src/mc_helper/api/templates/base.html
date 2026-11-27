@@ -3,12 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Minecraft Helper{% endblock %}</title>
-  <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/app.js" defer></script>
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}{{ server_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ static_url('app.css') }}">
+  <script src="{{ static_url('app.js') }}" defer></script>
 </head>
-<body>
+<body class="{% block bodyclass %}{% endblock %}">
   <main>
+    {% block header %}{% endblock %}
     {% block body %}{% endblock %}
   </main>
 </body>

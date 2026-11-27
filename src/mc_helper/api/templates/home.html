@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Our Minecraft Server{% endblock %}
+{% block title %}{{ server_name }}{% endblock %}
 
 {% macro action_form(action, label, css="big", arg=None, confirm=None) %}
 <form method="post" action="/actions/{{ action }}"{% if confirm %} data-confirm="{{ confirm }}"{% endif %}>
@@ -9,134 +9,158 @@
 </form>
 {% endmacro %}
 
-{% block body %}
-<header>
-  <h1>Our Minecraft Server</h1>
-  <form method="post" action="/logout">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button type="submit" class="small">Log out</button>
-  </form>
-</header>
+{% macro avatar(name) %}<span class="avatar {{ avatar_class(name) }}" aria-hidden="true">{{ initial(name) }}</span>{% endmacro %}
 
-<div id="working" class="notice pending" role="status" hidden>Working on it. This can take a little while...</div>
+{% macro add_friend_form(button_label) %}
+<form method="post" action="/actions/allowlist_add" class="addform">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="friend">Xbox gamertag</label>
+  <input id="friend" name="arg" type="text" maxlength="16" pattern="[A-Za-z0-9 ]{1,16}" autocomplete="off" autocapitalize="off" spellcheck="false" required aria-describedby="friend-hint">
+  <p class="hint" id="friend-hint">{{ hint }}</p>
+  <button type="submit" class="big go">{{ button_label }}</button>
+</form>
+{% endmacro %}
+
+{% block header %}{% with page="home" %}{% include "_nav.html" %}{% endwith %}{% endblock %}
+
+{% block body %}
+<div id="working" class="banner pending" role="status" hidden>Working on it. This can take a little while...</div>
 
 {% if notice %}
-<div id="result" class="notice {{ notice.kind }}" role="status">
-  <strong>{{ notice.title }}</strong>
-  <span>{{ notice.text }}</span>
-  {% if notice.kind == "pending" %}<a class="link" href="/?r={{ check_id }}">Check again</a>{% endif %}
+<div id="result" class="banner {{ notice.kind }}" role="status">
+  <div>
+    <strong>{{ notice.title }}</strong>
+    <span>{{ notice.text }}</span>
+  </div>
+  {% if notice.kind == "pending" %}<a class="button-link" href="/?r={{ check_id }}">Check again</a>{% endif %}
 </div>
 {% endif %}
 
-{% if responding %}
-<p class="pill on">The server is on</p>
-{% else %}
-<p class="pill off">The server is busy or not answering right now. The buttons are hidden until it is back.</p>
-{% endif %}
-
-<section class="card">
-  <h2>Who is playing now</h2>
-  {% if status and responding and status.online %}
-  <ul class="names">{% for name in status.online %}<li>{{ name }}</li>{% endfor %}</ul>
-  {% elif responding %}
-  <p>Nobody is on right now.</p>
+<section class="status {{ 'on' if responding else 'off' }}" aria-label="Server status">
+  <p class="status-line">
+    <span class="dot" aria-hidden="true"></span>
+    {% if responding %}<strong>The server is on</strong>{% else %}<strong>The server is busy or not answering</strong>{% endif %}
+  </p>
+  {% if responding %}
+    {% if status.online %}
+    <p class="status-sub">Playing now:</p>
+    <ul class="people">{% for name in status.online %}<li>{{ avatar(name) }}<span>{{ name }}</span></li>{% endfor %}</ul>
+    {% else %}
+    <p class="status-sub">Nobody is playing right now.</p>
+    {% endif %}
   {% else %}
-  <p>I can't tell right now.</p>
+  <p class="status-sub">The buttons are hidden until it is back. You can still see the lists below.</p>
   {% endif %}
 </section>
 
-<section class="card">
-  <h2>My friends</h2>
-  <p class="hint">Only these friends can play.</p>
+{% if first_run %}
+<section class="card firstrun" aria-labelledby="first-title">
+  <p class="step">First step</p>
+  <h2 id="first-title">Add yourself first</h2>
+  <p>Nobody is on the friends list yet, and only people on the list can play. Type your own Xbox gamertag and add yourself. Then you can add your friends.</p>
+  {{ add_friend_form("Add me to the list") }}
+</section>
+{% endif %}
+
+<a class="promo" href="/friends-guide">
+  <span class="promo-title">Get your friends playing</span>
+  <span class="promo-text">Step by step help for every kind of device, ready to print or share.</span>
+  <span class="promo-go" aria-hidden="true">Open the guide</span>
+</a>
+
+<section class="card" aria-labelledby="friends-title">
+  <h2 id="friends-title">Your friends</h2>
   {% if status and status.allowlist %}
+  <p class="hint">Only the people on this list can play.</p>
   <ul class="friends">
     {% for name in status.allowlist %}
     <li>
-      <span>{{ name }}</span>
+      {{ avatar(name) }}
+      <span class="name">{{ name }}</span>
       {% if not responding %}
       {% elif usable(name) %}
       {{ action_form("allowlist_remove", "Remove", "small danger", name, "Remove " ~ name ~ " from your friends?") }}
       {% else %}
-      <span class="hint">Ask Dad</span>
+      <span class="hint">Ask {{ helper_name }}</span>
       {% endif %}
     </li>
     {% endfor %}
   </ul>
+  {% elif first_run %}
+  <p>Your friends will show up here once you add them.</p>
+  <p class="hint">If you just added yourself, it can take a few seconds to show up.</p>
   {% else %}
   <p>No friends are on the list yet.</p>
+  <p class="hint">If you just added someone, it can take a few seconds to show up.</p>
   {% endif %}
 
-  {% if responding %}
+  {% if responding and not first_run %}
   <h3>Add a friend</h3>
-  <form method="post" action="/actions/allowlist_add">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label for="friend">Their Xbox gamertag</label>
-    <input id="friend" name="arg" type="text" maxlength="16" pattern="[A-Za-z0-9 ]{1,16}" autocomplete="off" required>
-    <p class="hint">{{ hint }}</p>
-    <button type="submit" class="big go">Add my friend</button>
-  </form>
+  {{ add_friend_form("Add my friend") }}
   {% endif %}
 </section>
 
-{% if responding %}
-<section class="card">
-  <h2>Time</h2>
-  <div class="row">
-    {% for value, label in time_buttons %}{{ action_form("set_time", label, "big", value) }}{% endfor %}
-  </div>
-</section>
-
-<section class="card">
-  <h2>Weather</h2>
-  <div class="row">
-    {% for value, label in weather_buttons %}{{ action_form("set_weather", label, "big", value) }}{% endfor %}
-  </div>
-</section>
-
-<section class="card">
-  <h2>Spawn</h2>
-  {% if spawn_names %}
-  <form method="post" action="/actions/set_spawn_here">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label for="me">Pick your name</label>
-    <select id="me" name="arg" required>
-      {% for name in spawn_names %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
-    </select>
-    <button type="submit" class="big">Set spawn to where I'm standing</button>
-  </form>
-  {% else %}
-  <p>Join the game first, then come back and press this button. If your name is here but has no button, ask Dad.</p>
-  {% endif %}
-</section>
-{% endif %}
-
-<section class="card">
-  <h2>Keep it safe</h2>
-  {% if responding %}{{ action_form("backup_now", "Save a backup now") }}{% endif %}
-  {% if last_backup %}
-  <p>Last backup: {{ last_backup }}{% if status and not status.last_backup_ok %}. It did not work. Tell Dad.{% endif %}</p>
-  {% else %}
-  <p>There is no backup yet.</p>
-  {% endif %}
-</section>
-
-<section class="card">
-  <h2>Restart</h2>
+<section class="card" aria-labelledby="controls-title">
+  <h2 id="controls-title">Server controls</h2>
   {% if responding %}
-  <p class="hint">Fixes most problems.</p>
-  {{ action_form("restart", "Restart the server", "big danger", None, "This kicks everyone out. The server will be back in about a minute. Restart it?") }}
+  <div class="control">
+    <h3>Backup</h3>
+    {{ action_form("backup_now", "Save a backup now") }}
+  </div>
   {% endif %}
-  {% if status %}<p>Minecraft version: {{ status.server_version }}</p>{% endif %}
+  <p class="fact">
+    {% if last_backup %}Last backup: <strong>{{ last_backup }}</strong>{% if status and not status.last_backup_ok %}. It did not work. Tell {{ helper_name }}.{% endif %}
+    {% else %}There is no backup yet.{% endif %}
+  </p>
+
+  {% if responding %}
+  <div class="control">
+    <h3>Time of day</h3>
+    <div class="row">
+      {% for value, label in time_buttons %}{{ action_form("set_time", label, "big", value) }}{% endfor %}
+    </div>
+  </div>
+
+  <div class="control">
+    <h3>Weather</h3>
+    <div class="row three">
+      {% for value, label in weather_buttons %}{{ action_form("set_weather", label, "big", value) }}{% endfor %}
+    </div>
+  </div>
+
+  <div class="control">
+    <h3>Spawn point</h3>
+    {% if spawn_names %}
+    <form method="post" action="/actions/set_spawn_here">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label for="me">Pick your name</label>
+      <select id="me" name="arg" required>
+        {% for name in spawn_names %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+      </select>
+      <button type="submit" class="big">Set spawn to where I'm standing</button>
+    </form>
+    {% else %}
+    <p>Join the game first, then come back and press this button. If your name is here but has no button, ask {{ helper_name }}.</p>
+    {% endif %}
+  </div>
+
+  <div class="control">
+    <h3>Restart</h3>
+    <p class="hint">Fixes most problems.</p>
+    {{ action_form("restart", "Restart the server", "big danger", None, "This kicks everyone out. The server will be back in about a minute. Restart it?") }}
+  </div>
+  {% endif %}
+  {% if status %}<p class="fact">Minecraft version: <strong>{{ status.server_version }}</strong></p>{% endif %}
 </section>
 
-<section class="card">
-  <h2>What happened lately</h2>
+<section class="card" aria-labelledby="activity-title">
+  <h2 id="activity-title">What happened lately</h2>
   {% if activity %}
   <ul class="activity">
     {% for row in activity %}
     <li class="{{ 'ok' if row.ok else 'fail' }}">
       <span class="badge">{{ "Done" if row.ok else "Did not work" }}</span>
-      <span>{{ row.message }}</span>
+      <span class="msg">{{ row.message }}</span>
       <time>{{ row.when }}</time>
     </li>
     {% endfor %}

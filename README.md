@@ -15,6 +15,7 @@ Make a control folder with `requests/` and `results/` inside it, put a PIN (4 or
 - `CONTROL_DIR`: the control folder
 - `PIN_FILE` and `SESSION_SECRET_FILE`: the two files
 - `COOKIE_SECURE=false`: needed on plain `http://localhost`
+- `SERVER_ADDRESS`, `BROADCAST_GAMERTAG` and `SERVER_DISPLAY_NAME` (required): the game server details shown on the friends guide page, for example `play.example.org`, `ServerFriend` and `ExampleServer` ([ADR 0008](docs/adr/0008-friends-guide-page.md)). Optional: `SERVER_PORT` (default 19132) and `HELPER_NAME` (default `a grown-up`)
 
 ```sh
 uv run uvicorn mc_helper.app.main:create_app --factory --port 8000

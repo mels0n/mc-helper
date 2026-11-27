@@ -63,7 +63,7 @@ def test_names_that_cannot_be_sent_back_get_ask_dad(
     client, _ = logged_in
     write_status(online=["Alex", " lead", "bad;name"], allowlist=["Sam", " lead", "bad;name"])
     html = client.get("/").text
-    assert html.count("Ask Dad") == 2
+    assert html.count("Ask a grown-up") == 2
     assert html.count('action="/actions/allowlist_remove"') == 1
     assert 'value="Alex"' in html
     assert 'value=" lead"' not in html
@@ -143,7 +143,7 @@ def test_unhandled_error_still_carries_headers(
     assert "frame-ancestors" in response.headers["content-security-policy"]
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
-    assert "Tell Dad" in response.text
+    assert "Tell a grown-up" in response.text
 
 
 def test_no_em_dashes_in_any_rendered_page(

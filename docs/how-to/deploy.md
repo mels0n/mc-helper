@@ -10,6 +10,9 @@ The commands below are PowerShell, run from your own machine against a Swarm man
 | `<image>` | `ghcr.io/mels0n/mc-helper:sha-<12 chars>`, the tag CI published for the commit. Never `:latest` |
 | `<control-path>` | Host path of the shared control folder (NFS), the one the server supervisor also mounts |
 | `<proxy-network-subnet>` | Subnet of `proxy_internal`, see step 2 |
+| `<game-address>` | Host name players type to reach the game server, for example `play.example.org` |
+| `<broadcast-gamertag>` | Xbox gamertag of the account that makes the server show up in consoles' Friends tab |
+| `<display-name>` | Name of the server shown in page titles and the friends guide |
 
 ## 1. Check the control folder
 
@@ -80,6 +83,9 @@ ssh.exe <manager> docker service create --name mc-helper --with-registry-auth `
   --env TRUSTED_PROXIES=<proxy-network-subnet> `
   --env COOKIE_SECURE=true `
   --env DISPLAY_TIMEZONE=America/Chicago `
+  --env SERVER_ADDRESS=<game-address> `
+  --env BROADCAST_GAMERTAG=<broadcast-gamertag> `
+  --env SERVER_DISPLAY_NAME=<display-name> `
   --mount type=bind,source=<control-path>,target=/control `
   --read-only `
   --cap-drop ALL `
@@ -87,6 +93,20 @@ ssh.exe <manager> docker service create --name mc-helper --with-registry-auth `
   --update-order stop-first `
   --restart-condition on-failure `
   <image>
+```
+
+Three settings are required, and the service refuses to start without them:
+
+- `SERVER_ADDRESS`: a host name made of valid DNS labels (letters, digits and hyphens, no label starting or ending with a hyphen, no empty label, 63 characters per label, 253 characters at most).
+- `BROADCAST_GAMERTAG`: a valid gamertag (1 to 16 letters, digits and spaces, at least one letter or digit, no space at either end).
+- `SERVER_DISPLAY_NAME`: 1 to 40 printable characters, no space at either end.
+
+Optional: `SERVER_PORT` (default `19132`, the Bedrock port) and `HELPER_NAME` (default `a grown-up`), the name the pages use in "Ask ..." and "Tell ..." sentences (1 to 40 printable characters, no space at either end). Add `--env HELPER_NAME=<name>` to set it.
+
+To add or change one of these on a running service, without recreating it:
+
+```powershell
+ssh.exe <manager> docker service update --with-registry-auth --env-add SERVER_ADDRESS=<game-address> mc-helper
 ```
 
 Keep it at one replica: the login lockout counts failures in the process. No ports are published.

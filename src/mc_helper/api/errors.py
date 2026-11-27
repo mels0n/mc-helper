@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import RedirectResponse, Response
 
+from mc_helper.api.deps import services
 from mc_helper.api.middleware import apply_headers
 from mc_helper.api.pages import login_page, render
 from mc_helper.shared.errors import (
@@ -26,6 +27,10 @@ log = logging.getLogger(__name__)
 
 def _error_page(request: Request, status: int, title: str, message: str) -> Response:
     return render(request, "error.html", {"title": title, "message": message}, status=status)
+
+
+def _tell_helper(request: Request, message: str) -> str:
+    return f"{message} Tell {services(request).settings.helper_name}."
 
 
 async def _domain_error(request: Request, exc: Exception) -> Response:
@@ -48,10 +53,12 @@ async def _domain_error(request: Request, exc: Exception) -> Response:
         case ServerNotResponding():
             return _error_page(request, 503, "The server is busy", exc.message)
         case ControlUnavailable():
-            return _error_page(request, 503, "Server controls are away", exc.message)
+            return _error_page(
+                request, 503, "Server controls are away", _tell_helper(request, exc.message)
+            )
         case _:
             log.error("unmapped domain error", exc_info=exc)
-            return _error_page(request, 500, "Oops", "Something went wrong. Tell Dad.")
+            return _error_page(request, 500, "Oops", _tell_helper(request, "Something went wrong."))
 
 
 async def _bad_form(request: Request, exc: Exception) -> Response:
@@ -71,7 +78,7 @@ async def _unexpected(request: Request, exc: Exception) -> Response:
     # This handler runs outside the request middleware, so it applies the headers itself.
     request_id = getattr(request.state, "request_id", None) or new_request_id()
     log.error("unhandled error", exc_info=exc, extra={"request_id": request_id})
-    response = _error_page(request, 500, "Oops", "Something went wrong. Tell Dad.")
+    response = _error_page(request, 500, "Oops", _tell_helper(request, "Something went wrong."))
     apply_headers(response, request_id, request.url.path)
     return response
 
