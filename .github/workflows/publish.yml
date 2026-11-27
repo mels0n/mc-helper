@@ -60,11 +60,14 @@ jobs:
         env:
           IMAGE: ghcr.io/${{ github.repository }}:${{ steps.tag.outputs.tag }}
         run: |
-          if docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
+          if out=$(docker buildx imagetools inspect "$IMAGE" 2>&1); then
             echo "found=true" >> "$GITHUB_OUTPUT"
             echo "$IMAGE already exists; not rebuilding."
-          else
+          elif grep -qiE 'not found|manifest unknown' <<<"$out"; then
             echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Could not check $IMAGE: $out" >&2
+            exit 1
           fi
       - if: steps.exists.outputs.found == 'false'
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
