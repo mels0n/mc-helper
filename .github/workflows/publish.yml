@@ -19,8 +19,17 @@ on:
 permissions:
   contents: read
 
+# One publish per commit at a time: a manual run on the same commit as a push run queues
+# behind it instead of racing it. Different commits are not grouped, so none is dropped.
+# Never cancelled, so an image push is not cut off halfway.
+concurrency:
+  group: publish-${{ github.sha }}
+  cancel-in-progress: false
+
 jobs:
   checks:
+    # Only main is checked and published here; other branches are checked by pull requests.
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/standards.yml
 
   publish:

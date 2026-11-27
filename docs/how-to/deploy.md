@@ -58,7 +58,7 @@ $bytes = New-Object byte[] 48
 
 ## 4. Get the image
 
-Every push to `main` that changes the app runs the checks and then publishes `ghcr.io/mels0n/mc-helper:sha-<first 12 characters of the commit>`. To publish the current `main` without a new commit, run it by hand: `gh workflow run publish.yml --ref main`. Deploy that tag. The package is private, so log the manager in to GHCR once with a token that has the `read:packages` scope (you are prompted for the token):
+Every push to `main` that changes the app runs the checks and then publishes `ghcr.io/mels0n/mc-helper:sha-<first 12 characters of the commit>`. Deploy that tag. If no new commit is pending, publish the current `main` by hand with `gh workflow run publish.yml --ref main` (it works once the workflow file is on `main`); the tag is built from the head commit of `main`. The package is private, so log the manager in to GHCR once with a token that has the `read:packages` scope (you are prompted for the token):
 
 ```powershell
 ssh.exe -t <manager> docker login ghcr.io -u <github-user>
