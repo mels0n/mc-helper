@@ -12,8 +12,8 @@ on:
       - '.dockerignore'
       - '.github/workflows/publish.yml'
       - '.github/workflows/standards.yml'
-  # Manual run: rebuild and publish the current main (for example after the first push of the
-  # repository, which does not trigger path-filtered workflows).
+  # Manual run: publish the current main when no push run has (for example when a push did
+  # not start the workflow). A commit that already has an image is not rebuilt.
   workflow_dispatch:
 
 permissions:
@@ -54,7 +54,20 @@ jobs:
       - name: Compute tag
         id: tag
         run: echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      # A tag names one image: if this commit was already published, keep that image.
+      - name: Check whether the tag exists
+        id: exists
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ steps.tag.outputs.tag }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE" >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "$IMAGE already exists; not rebuilding."
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.exists.outputs.found == 'false'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           push: true
