@@ -373,7 +373,8 @@ def test_non_regular_file_warns_once(control_dir: Path, caplog: pytest.LogCaptur
 def test_warn_once_past_the_cap_logs_debug_and_stays_bounded(
     control_dir: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    store_module._warned.clear()  # pyright: ignore[reportPrivateUsage]
+    fresh: set[str] = set()
+    monkeypatch.setattr(store_module, "_warned", fresh)
     monkeypatch.setattr(store_module, "_MAX_WARNED", 1)
     (control_dir / "status.json").mkdir()
     (control_dir / "results" / "a.json").mkdir()
