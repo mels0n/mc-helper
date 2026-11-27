@@ -4,7 +4,7 @@
 - Date: 2026-11-26
 
 ## Context
-The page runs on the home network behind an internal reverse proxy. A visiting child on the same Wi-Fi must not be able to remove friends or restart the server. There is one family, so per-user accounts would be ceremony.
+The page runs on a private network behind a reverse proxy. A visiting child on the same Wi-Fi must not be able to remove friends or restart the server. There is one family, so per-user accounts would be ceremony.
 
 ## Decision
 - One shared PIN, read from a secret file at boot, hashed with scrypt under a random salt, and compared by hash in constant time.

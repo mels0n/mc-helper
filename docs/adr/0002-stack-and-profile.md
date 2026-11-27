@@ -4,7 +4,7 @@
 - Date: 2026-11-26
 
 ## Context
-mc-helper is a one-page tool a ten-year-old uses to manage a family Minecraft server: friend list, backups, restart, time and weather. It has no database and no accounts. It runs as a single container on a home network.
+mc-helper is a one-page tool a child uses to manage a family Minecraft server: friend list, backups, restart, time and weather. It has no database and no accounts. It runs as a single container on a private network.
 
 ## Decision
 - Python 3.13, FastAPI, Jinja2 server-rendered pages, plain CSS, and a few lines of vanilla JavaScript (confirm dialogs and a "working" banner). The pages work without the script.

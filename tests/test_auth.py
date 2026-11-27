@@ -71,7 +71,8 @@ def test_session_tamper_and_expiry() -> None:
     token, session = codec.issue(authed=True, ttl_seconds=100)
     assert codec.read(token) == session
     body, sig = token.split(".")
-    assert codec.read(f"{body}.{sig[:-2]}AA") is None
+    flipped = "A" if sig[-1] != "A" else "B"  # always a different last character
+    assert codec.read(f"{body}.{sig[:-1]}{flipped}") is None
     other, _ = SessionCodec("z" * 40, "2468", clock).issue(authed=True, ttl_seconds=100)
     assert codec.read(other) is None
     assert codec.read("garbage") is None
@@ -97,8 +98,8 @@ def test_require_login_and_csrf() -> None:
 
 def test_client_ip_trusts_forwarded_only_from_proxy() -> None:
     proxies = parse_networks(["10.0.0.0/24"])
-    assert client_ip("10.0.0.5", ["192.168.1.9"], proxies) == "192.168.1.9"
-    assert client_ip("192.168.1.50", ["1.1.1.1"], proxies) == "192.168.1.50"
+    assert client_ip("10.0.0.5", ["192.0.2.9"], proxies) == "192.0.2.9"
+    assert client_ip("192.0.2.50", ["203.0.113.1"], proxies) == "192.0.2.50"
     assert client_ip("10.0.0.5", ["junk"], proxies) == "10.0.0.5"
     assert client_ip(None, [], proxies) == "0.0.0.0"
     assert bucket_key("2001:db8:1:2:3:4:5:6") == bucket_key("2001:db8:1:2::9")
@@ -153,12 +154,14 @@ def test_parallel_wrong_pins_cannot_exceed_the_limit() -> None:
 
 
 def test_multi_hop_forwarded_chain_and_malformed_entries() -> None:
-    proxies = parse_networks(["10.0.0.0/24", "10.0.1.0/24"])
+    proxies = parse_networks(["10.0.0.0/24", "198.51.100.0/24"])
     # right-most untrusted entry wins; a client cannot prepend its own claim
-    assert client_ip("10.0.0.5", ["6.6.6.6, 192.168.1.9, 10.0.1.7"], proxies) == "192.168.1.9"
-    assert client_ip("10.0.0.5", ["6.6.6.6", "192.168.1.9, 10.0.1.7"], proxies) == "192.168.1.9"
+    assert client_ip("10.0.0.5", ["203.0.113.66, 192.0.2.9, 198.51.100.7"], proxies) == "192.0.2.9"
+    assert (
+        client_ip("10.0.0.5", ["203.0.113.66", "192.0.2.9, 198.51.100.7"], proxies) == "192.0.2.9"
+    )
     # a malformed entry reached before an untrusted one falls back to the peer
-    assert client_ip("10.0.0.5", ["192.168.1.9, junk"], proxies) == "10.0.0.5"
-    assert client_ip("10.0.0.5", ["10.0.1.7"], proxies) == "10.0.0.5"  # no untrusted entry
+    assert client_ip("10.0.0.5", ["192.0.2.9, junk"], proxies) == "10.0.0.5"
+    assert client_ip("10.0.0.5", ["198.51.100.7"], proxies) == "10.0.0.5"  # no untrusted entry
     assert client_ip("10.0.0.5", [], proxies) == "10.0.0.5"
-    assert client_ip("::ffff:10.0.0.5", ["192.168.1.9"], proxies) == "192.168.1.9"
+    assert client_ip("::ffff:10.0.0.5", ["192.0.2.9"], proxies) == "192.0.2.9"

@@ -12,7 +12,7 @@ services:
       CONTROL_DIR: /control
       TRUSTED_PROXIES: <proxy-network-subnet>
       COOKIE_SECURE: "true"
-      DISPLAY_TIMEZONE: America/Chicago
+      DISPLAY_TIMEZONE: <timezone>
       SERVER_ADDRESS: <game-address>
       BROADCAST_GAMERTAG: <broadcast-gamertag>
       SERVER_DISPLAY_NAME: <display-name>
@@ -24,7 +24,7 @@ services:
         source: <control-path>
         target: /control
     networks:
-      - proxy_internal
+      - <proxy-network>
     # No published ports: the reverse proxy reaches the app by service name.
     read_only: true
     cap_drop:
@@ -43,5 +43,5 @@ secrets:
     external: true
 
 networks:
-  proxy_internal:
+  <proxy-network>:
     external: true

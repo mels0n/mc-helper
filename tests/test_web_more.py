@@ -118,13 +118,13 @@ def test_lockout_behind_trusted_proxy_counts_the_forwarded_client(
         ).status_code
 
     for _ in range(5):
-        assert attempt("0000", "192.168.1.50") == 401
-    assert attempt(PIN, "192.168.1.50") == 429  # that kid is locked out
-    assert attempt(PIN, "192.168.1.51") == 303  # another kid behind the proxy is not
+        assert attempt("0000", "192.0.2.50") == 401
+    assert attempt(PIN, "192.0.2.50") == 429  # that client is locked out
+    assert attempt(PIN, "192.0.2.51") == 303  # another client behind the proxy is not
     # A forged claim ahead of the real address does not help: the right-most one counts.
     for _ in range(5):
-        attempt("0000", "1.1.1.1, 192.168.1.60")
-    assert attempt(PIN, "2.2.2.2, 192.168.1.60") == 429
+        attempt("0000", "203.0.113.1, 192.0.2.60")
+    assert attempt(PIN, "203.0.113.2, 192.0.2.60") == 429
 
 
 def test_unhandled_error_still_carries_headers(

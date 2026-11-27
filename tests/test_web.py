@@ -60,10 +60,10 @@ def test_forged_forwarded_for_does_not_dodge_lockout(
         c.post(
             "/login",
             data={"pin": "0000", "csrf": csrf},
-            headers={"X-Forwarded-For": f"9.9.9.{index}"},
+            headers={"X-Forwarded-For": f"203.0.113.{index}"},
         )
     response = c.post(
-        "/login", data={"pin": PIN, "csrf": csrf}, headers={"X-Forwarded-For": "9.9.9.200"}
+        "/login", data={"pin": PIN, "csrf": csrf}, headers={"X-Forwarded-For": "203.0.113.200"}
     )
     assert response.status_code == 429
 

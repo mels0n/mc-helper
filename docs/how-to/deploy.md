@@ -1,15 +1,18 @@
 # Deploy to Docker Swarm
 
-Run mc-helper as one Swarm service behind the internal reverse proxy. [deploy/mc-helper.yml](../../deploy/mc-helper.yml) describes the service in one place. Create or update it with `docker service create` and `docker service update`, never with `docker stack deploy` ([why](../explanation/service-updates.md)).
+Run mc-helper as one Swarm service behind a reverse proxy that terminates TLS. [deploy/mc-helper.yml](../../deploy/mc-helper.yml) describes the service in one place. Create or update it with `docker service create` and `docker service update`, never with `docker stack deploy` ([why](../explanation/service-updates.md)).
 
 The commands below are PowerShell, run from your own machine against a Swarm manager over SSH. `<manager>` is the SSH host name of a manager node.
 
 | Placeholder | Meaning |
 | --- | --- |
 | `<manager>` | SSH host alias of a Swarm manager |
-| `<image>` | `ghcr.io/mels0n/mc-helper:sha-<12 chars>`, the tag CI published for the commit. Never `:latest` |
-| `<control-path>` | Host path of the shared control folder (NFS), the one the server supervisor also mounts |
-| `<proxy-network-subnet>` | Subnet of `proxy_internal`, see step 2 |
+| `<image>` | `ghcr.io/<owner>/mc-helper:sha-<12 chars>`, the tag CI published for the commit. Never `:latest` |
+| `<control-path>` | Host path of the shared control folder, the one the server supervisor also mounts (on a cluster, a network share such as NFS) |
+| `<proxy-network>` | Name of the overlay network your reverse proxy shares with the app |
+| `<proxy-network-subnet>` | Subnet of `<proxy-network>`, see step 2 |
+| `<admin-host>` | Host name the admin page is served on, for example `admin.example.org` |
+| `<timezone>` | Your IANA time zone, for example `Europe/Paris`. The default is `UTC` |
 | `<game-address>` | Host name players type to reach the game server, for example `play.example.org` |
 | `<broadcast-gamertag>` | Xbox gamertag of the account that makes the server show up in consoles' Friends tab |
 | `<display-name>` | Name of the server shown in page titles and the friends guide |
@@ -28,10 +31,10 @@ The service runs as uid 1000, gid 1000 (`--user 1000:1000` in step 5). That user
 ssh.exe <manager> ls -ln <control-path>
 ```
 
-New files from the supervisor must show up on the node quickly, or every action ends in "Waiting for the server". Check how the share is mounted:
+New files from the supervisor must show up on the node quickly, or every action ends in "Waiting for the server". Check how the share is mounted (look for the line whose mount point holds `<control-path>`):
 
 ```powershell
-ssh.exe <manager> "mount | grep /mnt/config"
+ssh.exe <manager> mount
 ```
 
 If actions always end in "Waiting for the server" although the supervisor does answer, the node's NFS directory cache is the usual cause. The fix is a mount option on the nodes: `lookupcache=positive`, or a short `actimeo` (a few seconds). This repository does not set either; check the current options first.
@@ -39,14 +42,14 @@ If actions always end in "Waiting for the server" although the supervisor does a
 ## 2. Find the proxy network subnet
 
 ```powershell
-ssh.exe <manager> "docker network inspect proxy_internal --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'"
+ssh.exe <manager> "docker network inspect <proxy-network> --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'"
 ```
 
-Use that value as `TRUSTED_PROXIES`. The page is for the home LAN and the kids Wi-Fi only, through the internal proxy, and is not reachable from the internet. The app attributes logins to the client address in `X-Forwarded-For`, but only when the connection comes from an address in `TRUSTED_PROXIES`. That subnet is the shared `proxy_internal` network, so any other container on it can forge the header and dodge the per-address lockout. The owner accepted this because the page is not internet-reachable ([ADR 0005](../adr/0005-shared-proxy-network.md)).
+Use that value as `TRUSTED_PROXIES`. The page is meant for the networks you allow, through your reverse proxy, and should not be reachable from the internet. The app attributes logins to the client address in `X-Forwarded-For`, but only when the connection comes from an address in `TRUSTED_PROXIES`. If `<proxy-network>` is shared with other services, any other container on it can forge the header and dodge the per-address lockout. That is acceptable only while the page is not internet-reachable; a network holding only the proxy and this service closes the gap ([ADR 0005](../adr/0005-shared-proxy-network.md)).
 
 ## 3. Create the secrets
 
-Two secrets. The PIN is what the family types: 4 or more characters, ASCII only (letters, digits and common symbols). The session secret signs the login cookie and must be at least 32 characters.
+Two secrets. The PIN is what everyone who uses the page types: 4 or more characters, ASCII only (letters, digits and common symbols). The session secret signs the login cookie and must be at least 32 characters.
 
 ```powershell
 $pin = Read-Host "PIN (4 or more ASCII characters)"
@@ -61,7 +64,7 @@ $bytes = New-Object byte[] 48
 
 ## 4. Get the image
 
-Every push to `main` that changes the app runs the checks and then publishes `ghcr.io/mels0n/mc-helper:sha-<first 12 characters of the commit>`. Deploy that tag. If no new commit is pending, publish the current `main` by hand with `gh workflow run publish.yml --ref main` (it works once the workflow file is on `main`); the tag is built from the head commit of `main`, and a commit that already has an image is not rebuilt. The package is private, so log the manager in to GHCR once with a token that has the `read:packages` scope (you are prompted for the token):
+Every push to `main` that changes the app runs the checks and then publishes `ghcr.io/<owner>/mc-helper:sha-<first 12 characters of the commit>`. Deploy that tag. If no new commit is pending, publish the current `main` by hand with `gh workflow run publish.yml --ref main` (it works once the workflow file is on `main`); the tag is built from the head commit of `main`, and a commit that already has an image is not rebuilt. The package is private, so log the manager in to GHCR once with a token that has the `read:packages` scope (you are prompted for the token):
 
 ```powershell
 ssh.exe -t <manager> docker login ghcr.io -u <github-user>
@@ -76,13 +79,13 @@ Fallback when CI is unavailable: build with `docker build -t <image> .` on a mac
 ```powershell
 ssh.exe <manager> docker service create --name mc-helper --with-registry-auth `
   --user 1000:1000 `
-  --network proxy_internal `
+  --network <proxy-network> `
   --secret mch_pin `
   --secret mch_session_secret `
   --env CONTROL_DIR=/control `
   --env TRUSTED_PROXIES=<proxy-network-subnet> `
   --env COOKIE_SECURE=true `
-  --env DISPLAY_TIMEZONE=America/Chicago `
+  --env DISPLAY_TIMEZONE=<timezone> `
   --env SERVER_ADDRESS=<game-address> `
   --env BROADCAST_GAMERTAG=<broadcast-gamertag> `
   --env SERVER_DISPLAY_NAME=<display-name> `
@@ -117,11 +120,11 @@ Wait until the task is healthy:
 ssh.exe <manager> docker service ps mc-helper
 ```
 
-## 6. Add the proxy vhost
+## 6. Add the proxy host
 
-Copy [deploy/swag/mcadmin.subdomain.conf](../../deploy/swag/mcadmin.subdomain.conf) into the internal proxy's `proxy-confs` folder, test the config and reload nginx. With a wildcard DNS record pointing at the internal proxy, `mcadmin.<your-domain>` needs no new DNS entry.
+Use [deploy/nginx/admin-page.conf.example](../../deploy/nginx/admin-page.conf.example) as the starting point for a server block on your reverse proxy: set `<admin-host>`, the certificate paths and the allowed networks, then test the config and reload nginx. Point DNS for `<admin-host>` at the proxy.
 
-Only networks that can reach the internal proxy can open the page. Confirm the firewall lets the home LAN and the kids Wi-Fi reach it.
+Only networks your proxy and firewall allow can open the page. Confirm every network that should use it can reach the proxy.
 
 ## Update to a new image
 
@@ -166,7 +169,7 @@ ssh.exe <manager> docker secret rm <old-secret>
 
 ## Check it works
 
-Open `https://mcadmin.<your-domain>`, log in, and press "Save a backup now". The result shows under "What happened lately". Logs are JSON lines:
+Open `https://<admin-host>`, log in, and press "Save a backup now". The result shows under "What happened lately". Logs are JSON lines:
 
 ```powershell
 ssh.exe <manager> docker service logs mc-helper --tail 50

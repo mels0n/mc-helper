@@ -85,8 +85,15 @@ def test_a_wrong_or_missing_file_version_is_not_cached_for_a_year(client: TestCl
 def test_an_unversioned_path_outside_the_hash_map_is_not_cached_for_a_year(
     client: TestClient,
 ) -> None:
-    odd = client.get("/static/./app.css")
-    if odd.status_code == 200:
-        assert odd.headers["cache-control"] == "no-cache"
+    # httpx keeps the doubled slash, and the static handler still serves the file.
+    odd = client.get("/static//app.css")
+    assert odd.request.url.path == "/static//app.css"
+    assert odd.status_code == 200
+    assert odd.headers["cache-control"] == "no-cache"
+    url = re.search(r'href="/static/(app\.css\?v=[0-9a-f]+)"', client.get("/login").text)
+    assert url
+    hashed_odd = client.get(f"/static//{url.group(1)}")
+    assert hashed_odd.status_code == 200
+    assert "immutable" not in hashed_odd.headers["cache-control"]
     plain = client.get("/static/app.css")
     assert plain.headers["cache-control"] == "no-cache"

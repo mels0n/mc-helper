@@ -1,0 +1,34 @@
+# Example nginx server block for the mc-helper admin page. Copy it, then replace every
+# placeholder in angle brackets and the example values below with your own.
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+
+    server_name <admin-host>;
+
+    ssl_certificate     <path-to-certificate>;
+    ssl_certificate_key <path-to-private-key>;
+
+    # Only these networks may open the page. The ranges below are reserved for documentation
+    # (RFC 5737) and a private range (RFC 1918) as examples: set your own, and keep the page
+    # away from the internet.
+    allow 192.0.2.0/24;
+    allow 198.51.100.0/24;
+    allow 10.0.0.0/8;
+    deny all;
+
+    client_max_body_size 1k;
+
+    location / {
+        # <app-service> is the name the app is reachable at on the shared overlay network.
+        proxy_pass http://<app-service>:8000;
+        proxy_set_header Host $host;
+        # Replace, never append: the app trusts this header only from the proxy's own address
+        # (TRUSTED_PROXIES), and uses the client address in it for the login lockout.
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # The app waits up to 30 seconds for the server to answer an action.
+        proxy_read_timeout 45s;
+    }
+}
