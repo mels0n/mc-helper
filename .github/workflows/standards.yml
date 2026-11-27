@@ -22,9 +22,10 @@ on:
       - '.github/workflows/standards.yml'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # Only superseded pull request runs are cancelled; a run called from the publish workflow
-  # must finish so that commit is published.
+  # Pull requests share one group per branch so a newer push cancels the older run. A run
+  # called from the publish workflow gets its own group (the run id), so it is never
+  # cancelled or dropped as a pending duplicate, and every publish commit gets its image.
+  group: ${{ github.event_name == 'pull_request' && format('{0}-{1}', github.workflow, github.ref) || format('called-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

@@ -36,8 +36,8 @@ _MAX_WARNED = 1000
 def _warn_once(message: str, path: Path, err: int | None) -> None:
     """Warn the first time a file fails to read; repeats are debug, so a bad file cannot flood."""
     key = f"{message}:{path}"
-    first = key not in _warned
-    if first and len(_warned) < _MAX_WARNED:
+    first = key not in _warned and len(_warned) < _MAX_WARNED
+    if first:
         _warned.add(key)
     log.log(
         logging.WARNING if first else logging.DEBUG,

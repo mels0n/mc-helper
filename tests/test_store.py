@@ -367,4 +367,4 @@ def test_non_regular_file_warns_once(control_dir: Path, caplog: pytest.LogCaptur
         for _ in range(3):
             assert store.read_status() is None
     levels = [r.levelname for r in caplog.records]
-    assert levels.count("WARNING") <= 1
+    assert levels.count("WARNING") == 1

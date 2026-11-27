@@ -115,13 +115,13 @@ Roll back with `docker service rollback mc-helper`.
 
 A Swarm secret cannot be replaced in place, so rotate by creating a new, versioned secret and swapping it in under the same target name. The session key is derived from both secrets ([ADR 0006](../adr/0006-session-key-includes-pin.md)), so rotating either one logs everyone out.
 
-Find which secret is mounted now. The output shows each `SecretName` followed by the `Name` of the file it appears under in the container:
+Find which secret is mounted now. This prints the container spec as JSON; its `Secrets` list has one entry per secret, each with a `File` object (whose `Name` is the target, `mch_pin` or `mch_session_secret`) and a `SecretName`:
 
 ```powershell
-ssh.exe <manager> "docker service inspect mc-helper | grep -E '\"(SecretName|Name)\"'"
+ssh.exe <manager> "docker service inspect mc-helper --format '{{json .Spec.TaskTemplate.ContainerSpec}}'"
 ```
 
-The `SecretName` just before `"Name": "mch_pin"` is `<current-pin-secret>` (`mch_session_secret` for the session secret). Use a new version suffix every time, for example the date:
+The `SecretName` in the entry whose `File` name is `mch_pin` is `<current-pin-secret>`; the one in the `mch_session_secret` entry is `<current-session-secret>`. Use a new version suffix every time, for example the date:
 
 ```powershell
 $pin = Read-Host "New PIN (4 or more ASCII characters)"
@@ -138,10 +138,10 @@ $bytes = New-Object byte[] 48
 ssh.exe <manager> docker service update --with-registry-auth --secret-rm <current-session-secret> --secret-add source=mch_session_secret_<version>,target=mch_session_secret mc-helper
 ```
 
-When `docker service ps mc-helper` shows the new task running and healthy, remove the old secret (it cannot be removed while a task still uses it):
+When `docker service ps mc-helper` shows the new task running and healthy, remove the secret you just swapped out (`<current-pin-secret>` or `<current-session-secret>`; it cannot be removed while a task still uses it):
 
 ```powershell
-ssh.exe <manager> docker secret rm <current-pin-secret>
+ssh.exe <manager> docker secret rm <old-secret>
 ```
 
 ## Check it works
