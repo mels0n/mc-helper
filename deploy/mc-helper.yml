@@ -1,0 +1,47 @@
+# Compose-format description of the single mc-helper service.
+# This file documents the service; it is not deployed as a stack. Create or update it with
+# `docker service create` / `docker service update` (see docs/how-to/deploy.md), never with
+# `docker stack deploy`. Secrets and the network are external: create them first.
+
+services:
+  mc-helper:
+    image: <registry-image-tag>
+    environment:
+      CONTROL_DIR: /control
+      PIN_FILE: /run/secrets/mch_pin
+      SESSION_SECRET_FILE: /run/secrets/mch_session_secret
+      # Subnet of the overlay network the reverse proxy reaches the app on.
+      TRUSTED_PROXIES: <proxy-network-subnet>
+      COOKIE_SECURE: "true"
+      DISPLAY_TIMEZONE: America/Chicago
+    secrets:
+      - mch_pin
+      - mch_session_secret
+    volumes:
+      - type: bind
+        source: <control-path>
+        target: /control
+    networks:
+      - proxy_internal
+    # No published ports: the reverse proxy reaches the app by service name.
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      replicas: 1 # login lockout counters live in the process; never scale out
+      update_config:
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+
+secrets:
+  mch_pin:
+    external: true
+  mch_session_secret:
+    external: true
+
+networks:
+  proxy_internal:
+    external: true

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block body %}
+<h1>Minecraft Helper</h1>
+<section class="card">
+  <h2>Type the PIN</h2>
+  {% if message %}<p class="notice fail" role="alert">{{ message }}</p>{% endif %}
+  <form method="post" action="/login">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="pin">PIN</label>
+    <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="128" required autofocus>
+    <button type="submit" class="big go">Let me in</button>
+  </form>
+</section>
+{% endblock %}

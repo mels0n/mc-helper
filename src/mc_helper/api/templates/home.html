@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Our Minecraft Server{% endblock %}
+
+{% macro action_form(action, label, css="big", arg=None, confirm=None) %}
+<form method="post" action="/actions/{{ action }}"{% if confirm %} data-confirm="{{ confirm }}"{% endif %}>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% if arg is not none %}<input type="hidden" name="arg" value="{{ arg }}">{% endif %}
+  <button type="submit" class="{{ css }}">{{ label }}</button>
+</form>
+{% endmacro %}
+
+{% block body %}
+<header>
+  <h1>Our Minecraft Server</h1>
+  <form method="post" action="/logout">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit" class="small">Log out</button>
+  </form>
+</header>
+
+<div id="working" class="notice pending" role="status" hidden>Working on it. This can take a little while...</div>
+
+{% if notice %}
+<div class="notice {{ notice.kind }}" role="status">
+  <strong>{{ notice.title }}</strong>
+  <span>{{ notice.text }}</span>
+  {% if notice.kind == "pending" %}<a class="link" href="/?r={{ check_id }}">Check again</a>{% endif %}
+</div>
+{% endif %}
+
+{% if responding %}
+<p class="pill on">The server is on</p>
+{% else %}
+<p class="pill off">The server is not answering right now. Buttons may not work until it is back.</p>
+{% endif %}
+
+<section class="card">
+  <h2>Who is playing now</h2>
+  {% if status and responding and status.online %}
+  <ul class="names">{% for name in status.online %}<li>{{ name }}</li>{% endfor %}</ul>
+  {% elif responding %}
+  <p>Nobody is on right now.</p>
+  {% else %}
+  <p>I can't tell right now.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>My friends</h2>
+  <p class="hint">Only these friends can play.</p>
+  {% if status and status.allowlist %}
+  <ul class="friends">
+    {% for name in status.allowlist %}
+    <li>
+      <span>{{ name }}</span>
+      {{ action_form("allowlist_remove", "Remove", "small danger", name, "Remove " ~ name ~ " from your friends?") }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No friends are on the list yet.</p>
+  {% endif %}
+
+  <h3>Add a friend</h3>
+  <form method="post" action="/actions/allowlist_add">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="friend">Their Xbox gamertag</label>
+    <input id="friend" name="arg" type="text" maxlength="16" pattern="[A-Za-z0-9 ]{1,16}" autocomplete="off" required>
+    <p class="hint">{{ hint }}</p>
+    <button type="submit" class="big go">Add my friend</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Time</h2>
+  <div class="row">
+    {% for value, label in time_buttons %}{{ action_form("set_time", label, "big", value) }}{% endfor %}
+  </div>
+</section>
+
+<section class="card">
+  <h2>Weather</h2>
+  <div class="row">
+    {% for value, label in weather_buttons %}{{ action_form("set_weather", label, "big", value) }}{% endfor %}
+  </div>
+</section>
+
+<section class="card">
+  <h2>Spawn</h2>
+  {% if status and responding and status.online %}
+  <form method="post" action="/actions/set_spawn_here">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="me">Pick your name</label>
+    <select id="me" name="arg" required>
+      {% for name in status.online %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="big">Set spawn to where I'm standing</button>
+  </form>
+  {% else %}
+  <p>Join the game first, then come back and press this button.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Keep it safe</h2>
+  {{ action_form("backup_now", "Save a backup now") }}
+  {% if last_backup %}
+  <p>Last backup: {{ last_backup }}{% if status and not status.last_backup_ok %}. It did not work. Tell Dad.{% endif %}</p>
+  {% else %}
+  <p>There is no backup yet.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Restart</h2>
+  <p class="hint">Fixes most problems.</p>
+  {{ action_form("restart", "Restart the server", "big danger", None, "This kicks everyone out. The server will be back in about a minute. Restart it?") }}
+  {% if status %}<p>Minecraft version: {{ status.server_version }}</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>What happened lately</h2>
+  {% if activity %}
+  <ul class="activity">
+    {% for row in activity %}
+    <li class="{{ 'ok' if row.ok else 'fail' }}">
+      <span class="badge">{{ "Done" if row.ok else "Did not work" }}</span>
+      <span>{{ row.message }}</span>
+      <time>{{ row.when }}</time>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>Nothing yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

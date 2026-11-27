@@ -1,0 +1,19 @@
+[importlinter]
+root_package = mc_helper
+
+[importlinter:contract:layers]
+name = Layer direction (downward imports only)
+type = layers
+layers =
+    mc_helper.app
+    mc_helper.api
+    mc_helper.features
+    mc_helper.entities
+    mc_helper.shared
+
+[importlinter:contract:slices]
+name = Feature slices do not import each other
+type = independence
+modules =
+    mc_helper.features.control
+    mc_helper.features.auth

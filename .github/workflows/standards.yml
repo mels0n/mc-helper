@@ -1,0 +1,88 @@
+name: Code Standards (Python)
+
+# Mechanical enforcement of the layer, lint and typecheck rules for a Python
+# repo (the python profile). These are FAILING gates, not advisory: a rule
+# nobody has seen fail is a rule nobody knows is wired up.
+#
+# Works for a packaged repo (pyproject.toml) and for a flat layout with no
+# pyproject: the repo root and src/ are put on PYTHONPATH so the layers import.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    types: [opened, synchronize]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
+
+    # A subproject in its own directory (a repo with one project per directory):
+    # run every step there by uncommenting this, and point PYTHONPATH above at
+    # that directory.
+    # defaults:
+    #   run:
+    #     working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # Nothing to install and nothing to check is a failure, not a pass.
+      - name: Guard against an empty repo
+        run: |
+          if [ ! -f pyproject.toml ] && [ -z "$(git ls-files -- '*.py' | head -n 1)" ]; then
+            echo "::error::No pyproject.toml and no tracked .py files. Nothing here can be checked."
+            exit 1
+          fi
+
+      - name: Install
+        run: |
+          if [ -f pyproject.toml ]; then pip install -e ".[dev]"; fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install import-linter ruff pyright pytest
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Typecheck
+        run: pyright
+
+      # lint-imports with no contract configured exits cleanly having checked
+      # nothing; fail that explicitly so it cannot pass as a green check.
+      - name: Guard against a false pass
+        run: |
+          if [ ! -f .importlinter ] && ! grep -qs '^\[tool\.importlinter' pyproject.toml && ! grep -qs '^\[importlinter' setup.cfg; then
+            echo "::error::No import-linter config found (.importlinter, [tool.importlinter] in pyproject.toml or [importlinter] in setup.cfg). The layer rules are not being checked."
+            exit 1
+          fi
+
+      - name: Layer direction rules
+        run: lint-imports
+
+      # pytest exits 5 when no tests were collected. That is not a failure on a
+      # new repo; any other nonzero exit is.
+      - name: Test
+        run: |
+          set +e
+          pytest
+          code=$?
+          if [ "$code" -eq 5 ]; then
+            echo "::warning::pytest collected no tests."
+            exit 0
+          fi
+          exit "$code"
