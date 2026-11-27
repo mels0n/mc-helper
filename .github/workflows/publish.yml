@@ -63,7 +63,10 @@ jobs:
           if out=$(docker buildx imagetools inspect "$IMAGE" 2>&1); then
             echo "found=true" >> "$GITHUB_OUTPUT"
             echo "$IMAGE already exists; not rebuilding."
-          elif grep -qiE 'not found|manifest unknown' <<<"$out"; then
+          # Absent tag: buildx prints "<image>: not found" (MANIFEST_UNKNOWN). A package that
+          # was never published answers 403 "denied" even to a token that may push to it, so
+          # that also means absent. Anything else (401, 429, 5xx, network) fails the run.
+          elif grep -qiE 'not found|manifest unknown|name unknown|denied|403 Forbidden' <<<"$out"; then
             echo "found=false" >> "$GITHUB_OUTPUT"
           else
             echo "Could not check $IMAGE: $out" >&2
