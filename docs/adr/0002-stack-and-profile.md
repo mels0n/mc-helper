@@ -14,7 +14,7 @@ mc-helper is a one-page tool a child uses to manage a family Minecraft server: f
 
 ## Alternatives rejected
 - **A SPA framework.** The page is a handful of forms. A build step, a second toolchain and client-side state buy nothing, and every action needs a full round trip to the server anyway.
-- **Node.** No reason to leave the language the rest of the home tooling uses.
+- **Node.** Python's standard library covers the file handling and hashing needed, and pydantic covers validation, so a second runtime and toolchain would add nothing.
 - **A database.** The server's supervisor owns all state. This app reads its files and keeps nothing of its own.
 
 ## Consequences

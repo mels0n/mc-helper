@@ -55,7 +55,10 @@ def render() -> str:
         "`src/mc_helper/entities/`. Do not edit by hand; run "
         "`uv run python scripts/gen_reference.py --write`. A test fails when this file is stale.",
         "",
-        "The control folder holds `requests/`, `results/` and `status.json`.",
+        "The control folder holds `requests/`, `results/` and `status.json`. The supervisor "
+        "creates `requests/` and `results/`; the app never does. Both directories must be "
+        "writable by the app's uid (it adds requests and deletes old results), and "
+        "`status.json` and the result files must be readable by it.",
         "",
         "## Request: `requests/<id>.json` (written by this app)",
         "",

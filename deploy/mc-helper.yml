@@ -7,6 +7,8 @@
 services:
   mc-helper:
     image: <image>
+    # Run as the uid and gid that can write the control folder. The image's own default user
+    # is 10001.
     user: "1000:1000"
     environment:
       CONTROL_DIR: /control

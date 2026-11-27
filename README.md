@@ -7,10 +7,8 @@ A small web page that lets a child manage a family Minecraft Bedrock server with
 Three pieces share one folder, the control spool:
 
 - **This app** serves the web page and writes a small JSON request file for each button press.
-- **A game-server supervisor** (see the companion server repository, link to be added) runs the Bedrock server, picks up those requests, carries them out, and writes back a result file and a `status.json`.
+- **A game-server supervisor** runs the Bedrock server, picks up those requests, carries them out, and writes back a result file and a `status.json`. No supervisor is bundled; the contract in [docs/reference/control-spool.md](docs/reference/control-spool.md) is what one must implement.
 - **A reverse proxy** with TLS sits in front of the app and decides which networks can open the page.
-
-The file formats the supervisor must read and write are in [docs/reference/control-spool.md](docs/reference/control-spool.md). Any supervisor that follows that contract works with this app.
 
 ## Run locally
 Needs Python 3.13 and [uv](https://docs.astral.sh/uv/).
@@ -43,28 +41,38 @@ You need:
 - A folder shared between the app and your game-server supervisor.
 - A supervisor that follows the [control spool contract](docs/reference/control-spool.md).
 
-Steps, with your own values in place of the placeholders:
+The placeholders below (`<control-path>`, `<pin-file>` and the rest) are defined in the [placeholder table](docs/how-to/deploy.md). Steps, with your own values in their place:
 
-1. Create the control folder `<control-path>` and mount it into the supervisor. It must contain `requests/` and `results/`; the supervisor creates them. The app runs as uid 1000 and needs write access to both.
-2. Write a PIN (4 or more ASCII characters) to `<pin-file>` and 32 or more random characters to `<secret-file>`.
-3. Pull the image and run it:
+1. Create the control folder `<control-path>` and mount it into the supervisor. Create `requests/` and `results/` inside it if your supervisor does not; the app never creates them. The app needs write access to both.
+2. Write a PIN (4 or more ASCII characters) to `<pin-file>` and 32 or more random characters to `<secret-file>`, and make both readable by the uid the app runs as:
 
    ```sh
-   docker run -d --name mc-helper --user 1000:1000 --read-only --cap-drop ALL \
+   chown 1000:1000 <pin-file> <secret-file>
+   chmod 400 <pin-file> <secret-file>
+   ```
+
+3. Get the image. Either fork this repository and run its Publish image workflow, which publishes `ghcr.io/<your-account>/mc-helper:sha-<12>` (log in with `docker login ghcr.io` and a token with `read:packages` if the package is private), or build it yourself with `docker build -t mc-helper .` and use `mc-helper` as the image name below.
+4. Run it. The commands run the app as uid 1000 (`--user 1000:1000`); use the uid and gid that can write your control folder. The image's own default user is 10001. `<proxy-network>` is a network the app shares with your reverse proxy (an overlay network must be `--attachable` for a standalone `docker run`). Set `TRUSTED_PROXIES` to that network's subnet, which `docker network inspect <proxy-network> --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'` prints. The app then believes `X-Forwarded-For` from addresses in it. Any other container on a shared network could forge that header and bypass the login lockout, so prefer a network that holds only the proxy and this app ([ADR 0005](docs/adr/0005-shared-proxy-network.md)).
+
+   ```sh
+   docker run -d --name mc-helper --restart unless-stopped \
+     --user 1000:1000 --read-only --cap-drop ALL \
      --network <proxy-network> \
      -v <control-path>:/control \
      -v <pin-file>:/run/secrets/mch_pin:ro \
      -v <secret-file>:/run/secrets/mch_session_secret:ro \
+     -e CONTROL_DIR=/control \
      -e TRUSTED_PROXIES=<proxy-network-subnet> \
+     -e COOKIE_SECURE=true \
+     -e DISPLAY_TIMEZONE=<timezone> \
      -e SERVER_ADDRESS=<game-address> \
      -e BROADCAST_GAMERTAG=<broadcast-gamertag> \
      -e SERVER_DISPLAY_NAME=<display-name> \
-     -e DISPLAY_TIMEZONE=<timezone> \
      ghcr.io/<owner>/mc-helper:sha-<12>
    ```
 
-4. Add a server block to your reverse proxy, starting from [deploy/nginx/admin-page.conf.example](deploy/nginx/admin-page.conf.example), and point DNS for `<admin-host>` at it.
-5. Open `https://<admin-host>`, log in with the PIN, and press "Save a backup now". The supervisor's answer shows under "What happened lately".
+5. Add a server block to your reverse proxy, starting from [deploy/nginx/admin-page.conf.example](deploy/nginx/admin-page.conf.example), and point DNS for `<admin-host>` at it. The app's name on the network is the container name, `mc-helper`.
+6. Open `https://<admin-host>`, log in with the PIN, and press "Save a backup now". The supervisor's answer shows under "What happened lately".
 
 ## Where secrets live
 Two secrets, mounted as files: the PIN (`mch_pin`) and a session secret (`mch_session_secret`) that signs the login cookie. The app reads them through `PIN_FILE` and `SESSION_SECRET_FILE`. On Swarm they are Docker secrets; on plain Docker they are read-only file mounts. Nothing else is secret, and no values are stored in this repository.

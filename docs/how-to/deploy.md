@@ -2,12 +2,17 @@
 
 Run mc-helper as one Swarm service behind a reverse proxy that terminates TLS. [deploy/mc-helper.yml](../../deploy/mc-helper.yml) describes the service in one place. Create or update it with `docker service create` and `docker service update`, never with `docker stack deploy` ([why](../explanation/service-updates.md)).
 
-The commands below are PowerShell, run from your own machine against a Swarm manager over SSH. `<manager>` is the SSH host name of a manager node.
+The command blocks are PowerShell run from your own machine against a Swarm manager over SSH. Where POSIX shell differs (secret creation), the POSIX form is shown next to it. `<manager>` is the SSH host name of a manager node.
 
 | Placeholder | Meaning |
 | --- | --- |
 | `<manager>` | SSH host alias of a Swarm manager |
-| `<image>` | `ghcr.io/<owner>/mc-helper:sha-<12 chars>`, the tag CI published for the commit. Never `:latest` |
+| `<owner>` | The GitHub account whose CI published the image. The tags are on the repository's Packages page |
+| `sha-<12>` | `sha-` followed by the first 12 characters of the commit the image was built from |
+| `<image>` | `ghcr.io/<owner>/mc-helper:sha-<12>`. Never `:latest` |
+| `<github-user>` | GitHub user name used to log in to the registry when the package is private |
+| `<pin-file>` | File holding the PIN (4 or more ASCII characters), for a plain `docker run` |
+| `<secret-file>` | File holding the session secret (32 or more random characters), for a plain `docker run` |
 | `<control-path>` | Host path of the shared control folder, the one the server supervisor also mounts (on a cluster, a network share such as NFS) |
 | `<proxy-network>` | Name of the overlay network your reverse proxy shares with the app |
 | `<proxy-network-subnet>` | Subnet of `<proxy-network>`, see step 2 |
@@ -21,7 +26,7 @@ The commands below are PowerShell, run from your own machine against a Swarm man
 
 The folder must already hold `requests/` and `results/`, created by the supervisor. The app never creates them: a missing mount must fail loudly instead of writing into the container.
 
-The service runs as uid 1000, gid 1000 (`--user 1000:1000` in step 5). That user needs:
+The commands run the app as uid 1000, gid 1000 (`--user 1000:1000`); use the uid and gid that can write your control folder. The image's own default user is 10001. That user needs:
 
 - write access to `requests/` (new requests, and cleanup of abandoned temp files),
 - write access to `results/` (the app deletes results older than a day),
@@ -45,7 +50,7 @@ If actions always end in "Waiting for the server" although the supervisor does a
 ssh.exe <manager> "docker network inspect <proxy-network> --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'"
 ```
 
-Use that value as `TRUSTED_PROXIES`. The page is meant for the networks you allow, through your reverse proxy, and should not be reachable from the internet. The app attributes logins to the client address in `X-Forwarded-For`, but only when the connection comes from an address in `TRUSTED_PROXIES`. If `<proxy-network>` is shared with other services, any other container on it can forge the header and dodge the per-address lockout. That is acceptable only while the page is not internet-reachable; a network holding only the proxy and this service closes the gap ([ADR 0005](../adr/0005-shared-proxy-network.md)).
+Use that value as `TRUSTED_PROXIES`. In a plain `docker run`, the network must have been created with `--attachable` if it is an overlay. The page is meant for the networks you allow, through your reverse proxy, and should not be reachable from the internet. The app attributes logins to the client address in `X-Forwarded-For`, but only when the connection comes from an address in `TRUSTED_PROXIES`. If `<proxy-network>` is shared with other services, any other container on it can forge the header and dodge the per-address lockout. That is acceptable only while the page is not internet-reachable; a network holding only the proxy and this service closes the gap ([ADR 0005](../adr/0005-shared-proxy-network.md)).
 
 ## 3. Create the secrets
 
@@ -56,15 +61,27 @@ $pin = Read-Host "PIN (4 or more ASCII characters)"
 $pin | ssh.exe <manager> docker secret create mch_pin -
 ```
 
+POSIX shell:
+
+```sh
+read -rs PIN && printf '%s' "$PIN" | ssh <manager> docker secret create mch_pin -
+```
+
 ```powershell
 $bytes = New-Object byte[] 48
 [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
 [Convert]::ToBase64String($bytes) | ssh.exe <manager> docker secret create mch_session_secret -
 ```
 
+POSIX shell:
+
+```sh
+openssl rand -base64 48 | ssh <manager> docker secret create mch_session_secret -
+```
+
 ## 4. Get the image
 
-Every push to `main` that changes the app runs the checks and then publishes `ghcr.io/<owner>/mc-helper:sha-<first 12 characters of the commit>`. Deploy that tag. If no new commit is pending, publish the current `main` by hand with `gh workflow run publish.yml --ref main` (it works once the workflow file is on `main`); the tag is built from the head commit of `main`, and a commit that already has an image is not rebuilt. The package is private, so log the manager in to GHCR once with a token that has the `read:packages` scope (you are prompted for the token):
+Every push to `main` that changes the app runs the checks and then publishes `ghcr.io/<owner>/mc-helper:sha-<first 12 characters of the commit>`. Deploy that tag. If no new commit is pending, publish the current `main` by hand with `gh workflow run publish.yml --ref main` (it works once the workflow file is on `main`); the tag is built from the head commit of `main`, and a commit that already has an image is not rebuilt. If the package is private, log the manager in to GHCR once with a token that has the `read:packages` scope (you are prompted for the token):
 
 ```powershell
 ssh.exe -t <manager> docker login ghcr.io -u <github-user>
@@ -104,7 +121,7 @@ Three settings are required, and the service refuses to start without them:
 - `BROADCAST_GAMERTAG`: a valid gamertag (1 to 16 letters, digits and spaces, at least one letter or digit, no space at either end).
 - `SERVER_DISPLAY_NAME`: 1 to 40 printable characters, no space at either end.
 
-Optional: `SERVER_PORT` (default `19132`, the Bedrock port) and `HELPER_NAME` (default `a grown-up`), the name the pages use in "Ask ..." and "Tell ..." sentences (1 to 40 printable characters, no space at either end). Add `--env HELPER_NAME=<name>` to set it.
+Optional: `SERVER_PORT` (default `19132`, the Bedrock port), `HELPER_NAME` (default `a grown-up`, the name the pages use in "Ask ..." and "Tell ..." sentences) and `DISPLAY_TIMEZONE` (default `UTC`, used for the times shown on the page). Add `--env NAME=<value>` to the create command to set one.
 
 To add or change one of these on a running service, without recreating it:
 
@@ -123,6 +140,8 @@ ssh.exe <manager> docker service ps mc-helper
 ## 6. Add the proxy host
 
 Use [deploy/nginx/admin-page.conf.example](../../deploy/nginx/admin-page.conf.example) as the starting point for a server block on your reverse proxy: set `<admin-host>`, the certificate paths and the allowed networks, then test the config and reload nginx. Point DNS for `<admin-host>` at the proxy.
+
+Never allow a Docker address pool in the proxy's allow list. On Swarm, publish the proxy's ports with `mode=host` (or use the PROXY protocol or the real-ip module) so the proxy sees the real client address; otherwise the allow list and the app's login lockout see one internal address for every client and stop working.
 
 Only networks your proxy and firewall allow can open the page. Confirm every network that should use it can reach the proxy.
 
