@@ -17,22 +17,28 @@ CSP = (
 )
 
 
+def apply_headers(response: Response, request_id: str, path: str) -> None:
+    """Headers every response carries, including the ones for an unhandled error."""
+    response.headers["X-Request-ID"] = request_id
+    response.headers["Content-Security-Policy"] = CSP
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Frame-Options"] = "DENY"
+    if not path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store"
+
+
 class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = new_request_id(request.headers.get("x-request-id"))
+        request.state.request_id = request_id
         token = request_id_var.set(request_id)
         started = time.perf_counter()
         try:
             response = await call_next(request)
         finally:
             request_id_var.reset(token)
-        response.headers["X-Request-ID"] = request_id
-        response.headers["Content-Security-Policy"] = CSP
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["X-Frame-Options"] = "DENY"
-        if not request.url.path.startswith("/static/"):
-            response.headers["Cache-Control"] = "no-store"
+        apply_headers(response, request_id, request.url.path)
         log.info(
             "request",
             extra={

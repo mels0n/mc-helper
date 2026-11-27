@@ -1,11 +1,29 @@
 """The server status document written by the supervisor. Untrusted input."""
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any, cast
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictBool, field_validator
 
-Name = Annotated[str, Field(max_length=100)]
+MAX_NAME_LENGTH = 100
+MAX_NAMES = 500
+MAX_VERSION_LENGTH = 50
+
+
+def _names(value: Any) -> Any:
+    """Keep the usable entries: drop non-strings and over-long names, cap the list."""
+    if not isinstance(value, list):
+        return value
+    items = cast("list[object]", value)
+    kept = [i for i in items if isinstance(i, str) and len(i) <= MAX_NAME_LENGTH]
+    return kept[:MAX_NAMES]
+
+
+def _version(value: Any) -> Any:
+    return value[:MAX_VERSION_LENGTH] if isinstance(value, str) else value
+
+
+Names = Annotated[list[str], BeforeValidator(_names)]
 
 
 def _aware(value: datetime) -> datetime:
@@ -15,9 +33,9 @@ def _aware(value: datetime) -> datetime:
 class ServerStatus(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    online: Annotated[list[Name], Field(max_length=500)]
-    allowlist: Annotated[list[Name], Field(max_length=500)]
-    server_version: Annotated[str, Field(max_length=50)]
+    online: Names
+    allowlist: Names
+    server_version: Annotated[str, BeforeValidator(_version), Field(max_length=MAX_VERSION_LENGTH)]
     last_backup: datetime | None
     last_backup_ok: StrictBool
     started: datetime

@@ -1,23 +1,37 @@
 # Deploy to Docker Swarm
 
-Run mc-helper as one Swarm service behind the internal reverse proxy. [deploy/mc-helper.yml](../../deploy/mc-helper.yml) describes the service in one place. Create or update it with `docker service create` and `docker service update`. Do not use `docker stack deploy`: it re-resolves every image tag in the stack and restarts services you did not mean to touch.
+Run mc-helper as one Swarm service behind the internal reverse proxy. [deploy/mc-helper.yml](../../deploy/mc-helper.yml) describes the service in one place. Create or update it with `docker service create` and `docker service update`, never with `docker stack deploy` ([why](../explanation/service-updates.md)).
 
 The commands below are PowerShell, run from your own machine against a Swarm manager over SSH. `<manager>` is the SSH host name of a manager node.
 
 | Placeholder | Meaning |
 | --- | --- |
 | `<manager>` | SSH host alias of a Swarm manager |
-| `<registry-image-tag>` | The exact image, `ghcr.io/<owner>/mc-helper:sha-<12 chars>`. Never `:latest` |
+| `<image>` | `ghcr.io/mels0n/mc-helper:sha-<12 chars>`, the tag CI published for the commit. Never `:latest` |
 | `<control-path>` | Host path of the shared control folder (NFS), the one the server supervisor also mounts |
 | `<proxy-network-subnet>` | Subnet of `proxy_internal`, see step 2 |
 
 ## 1. Check the control folder
 
-The folder must already hold `requests/` and `results/`, created by the supervisor. The app never creates them: a missing mount must fail loudly instead of writing into the container. The container runs as uid 10001, so that user needs write access to `requests/` and read access to `results/` and `status.json`.
+The folder must already hold `requests/` and `results/`, created by the supervisor. The app never creates them: a missing mount must fail loudly instead of writing into the container.
+
+The service runs as uid 1000, gid 1000 (`--user 1000:1000` in step 5). That user needs:
+
+- write access to `requests/` (new requests, and cleanup of abandoned temp files),
+- write access to `results/` (the app deletes results older than a day),
+- read access to the files in `results/` and to `status.json`.
 
 ```powershell
 ssh.exe <manager> ls -ln <control-path>
 ```
+
+New files from the supervisor must show up on the node quickly, or every action ends in "Waiting for the server". Check how the share is mounted:
+
+```powershell
+ssh.exe <manager> "mount | grep /mnt/config"
+```
+
+If actions always end in "Waiting for the server" although the supervisor does answer, the node's NFS directory cache is the usual cause. The fix is a mount option on the nodes: `lookupcache=positive`, or a short `actimeo` (a few seconds). This repository does not set either; check the current options first.
 
 ## 2. Find the proxy network subnet
 
@@ -25,14 +39,14 @@ ssh.exe <manager> ls -ln <control-path>
 ssh.exe <manager> "docker network inspect proxy_internal --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'"
 ```
 
-Use that value as `TRUSTED_PROXIES`. The app believes `X-Forwarded-For` only from addresses in it. Every service on `proxy_internal` can then name a client address, which is acceptable here because the PIN is the real gate and the lockout is a second layer (see [ADR 0004](../adr/0004-pin-login.md)). If you want a tighter setting, create a dedicated overlay that holds only the proxy and this service and trust that subnet instead.
+Use that value as `TRUSTED_PROXIES`. The page is for the home LAN and the kids Wi-Fi only, through the internal proxy, and is not reachable from the internet. The app attributes logins to the client address in `X-Forwarded-For`, but only when the connection comes from an address in `TRUSTED_PROXIES`. That subnet is the shared `proxy_internal` network, so any other container on it can forge the header and dodge the per-address lockout. The owner accepted this because the page is not internet-reachable ([ADR 0005](../adr/0005-shared-proxy-network.md)).
 
 ## 3. Create the secrets
 
-Two secrets. The PIN is what the family types. The session secret signs the login cookie and must be at least 32 characters.
+Two secrets. The PIN is what the family types: 4 or more characters, ASCII only (letters, digits and common symbols). The session secret signs the login cookie and must be at least 32 characters.
 
 ```powershell
-$pin = Read-Host "PIN (4 or more characters)"
+$pin = Read-Host "PIN (4 or more ASCII characters)"
 $pin | ssh.exe <manager> docker secret create mch_pin -
 ```
 
@@ -42,21 +56,23 @@ $bytes = New-Object byte[] 48
 [Convert]::ToBase64String($bytes) | ssh.exe <manager> docker secret create mch_session_secret -
 ```
 
-Changing the PIN later means removing the service, replacing the secret and creating the service again, because a secret in use cannot be replaced in place.
+## 4. Get the image
 
-## 4. Build and publish the image
-
-Build the image from the repository root and push it to your registry as `sha-<first 12 characters of the commit>`.
+Every push to `main` that changes the app runs the checks and then publishes `ghcr.io/mels0n/mc-helper:sha-<first 12 characters of the commit>`. Deploy that tag. The package is private, so log the manager in to GHCR once with a token that has the `read:packages` scope (you are prompted for the token):
 
 ```powershell
-docker build -t <registry-image-tag> .
-docker push <registry-image-tag>
+ssh.exe -t <manager> docker login ghcr.io -u <github-user>
 ```
+
+Use `--with-registry-auth` on every `docker service create` and `docker service update` of this service so the other nodes can pull.
+
+Fallback when CI is unavailable: build with `docker build -t <image> .` on a machine with Docker and push it to the registry yourself.
 
 ## 5. Create the service
 
 ```powershell
-ssh.exe <manager> docker service create --name mc-helper `
+ssh.exe <manager> docker service create --name mc-helper --with-registry-auth `
+  --user 1000:1000 `
   --network proxy_internal `
   --secret mch_pin `
   --secret mch_session_secret `
@@ -70,10 +86,10 @@ ssh.exe <manager> docker service create --name mc-helper `
   --replicas 1 `
   --update-order stop-first `
   --restart-condition on-failure `
-  <registry-image-tag>
+  <image>
 ```
 
-Add `--with-registry-auth` if the image is private. Keep it at one replica: the login lockout counts failures in the process. No ports are published.
+Keep it at one replica: the login lockout counts failures in the process. No ports are published.
 
 Wait until the task is healthy:
 
@@ -85,15 +101,25 @@ ssh.exe <manager> docker service ps mc-helper
 
 Copy [deploy/swag/mcadmin.subdomain.conf](../../deploy/swag/mcadmin.subdomain.conf) into the internal proxy's `proxy-confs` folder, test the config and reload nginx. With a wildcard DNS record pointing at the internal proxy, `mcadmin.<your-domain>` needs no new DNS entry.
 
-Only devices in a network zone that can reach the internal proxy can open the page. A device on a locked-down kids network cannot, until you add a firewall rule for it.
+Only networks that can reach the internal proxy can open the page. Confirm the firewall lets the home LAN and the kids Wi-Fi reach it.
 
 ## Update to a new image
 
 ```powershell
-ssh.exe <manager> docker service update --image <registry-image-tag> mc-helper
+ssh.exe <manager> docker service update --with-registry-auth --image <image> mc-helper
 ```
 
 Roll back with `docker service rollback mc-helper`.
+
+## Change the PIN
+
+The session key is derived from the session secret and the PIN, so changing the PIN logs everyone out ([ADR 0006](../adr/0006-session-key-includes-pin.md)). Create the new secret under a new name, then swap it in under the old target name:
+
+```powershell
+$pin = Read-Host "New PIN (4 or more ASCII characters)"
+$pin | ssh.exe <manager> docker secret create mch_pin_2 -
+ssh.exe <manager> docker service update --secret-rm mch_pin --secret-add source=mch_pin_2,target=mch_pin mc-helper
+```
 
 ## Check it works
 

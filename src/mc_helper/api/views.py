@@ -4,7 +4,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from mc_helper.entities import ActionResult
+from mc_helper.entities import ActionResult, is_gamertag
+
+
+def is_usable_name(name: str) -> bool:
+    """Whether a name from the status file can safely be sent back as a button argument."""
+    return is_gamertag(name) and name == name.strip(" ")
 
 
 def local_time(moment: datetime, tz: ZoneInfo) -> str:
@@ -48,9 +53,9 @@ def notice_for(result: ActionResult | None) -> Notice:
     if result is None:
         return Notice(
             "pending",
-            "Still working on it",
-            "The server is taking a while. Press Check again in a bit, "
-            "or look at What happened lately below.",
+            "Waiting for the server",
+            "The server has not picked this up yet. It is lined up and will happen when the "
+            "server is back, so please do not press the button again.",
         )
     if result.ok:
         return Notice("ok", "Done!", result.message)

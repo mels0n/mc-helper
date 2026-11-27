@@ -1,6 +1,6 @@
 # 0004. One shared PIN, signed session, CSRF token and lockout
 
-- Status: accepted
+- Status: accepted. Superseded in part by ADR-0005 (the consequences sentence about TRUSTED_PROXIES and a shared network).
 - Date: 2026-11-26
 
 ## Context

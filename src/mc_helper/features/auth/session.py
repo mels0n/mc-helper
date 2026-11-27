@@ -26,8 +26,11 @@ def _unb64(text: str) -> bytes:
 
 
 class SessionCodec:
-    def __init__(self, secret: str, clock: Callable[[], float] = time.time) -> None:
-        self._key = secret.encode("utf-8")
+    def __init__(self, secret: str, pin: str, clock: Callable[[], float] = time.time) -> None:
+        # The key depends on both secrets, so changing the PIN invalidates every session.
+        self._key = hmac.new(
+            secret.encode("utf-8"), b"mch-session" + b"\x00" + pin.encode("utf-8"), hashlib.sha256
+        ).digest()
         self._clock = clock
 
     def _sign(self, body: str) -> str:

@@ -22,7 +22,8 @@ from pydantic import (
 
 from mc_helper.shared.errors import InvalidInput
 
-GAMERTAG_RE = re.compile(r"[A-Za-z0-9 ]{1,16}")
+# At least one letter or digit, like the supervisor: a name of only spaces is not a name.
+GAMERTAG_RE = re.compile(r"(?= *[A-Za-z0-9])[A-Za-z0-9 ]{1,16}")
 TIMES = ("day", "noon", "night", "midnight")
 WEATHERS = ("clear", "rain", "thunder")
 MESSAGE_MAX = 300

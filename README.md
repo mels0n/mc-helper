@@ -20,10 +20,10 @@ Make a control folder with `requests/` and `results/` inside it, put a PIN (4 or
 uv run uvicorn mc_helper.app.main:create_app --factory --port 8000
 ```
 
-Without a supervisor, write a `status.json` into the control folder by hand (see [ADR 0003](docs/adr/0003-file-based-control-channel.md) for the fields) and answer requests by creating `results/<id>.json`. Checks: `uv run ruff check`, `uv run pyright`, `uv run lint-imports`, `uv run pytest`.
+Without a supervisor, write a `status.json` into the control folder by hand (fields in [docs/reference/control-spool.md](docs/reference/control-spool.md)) and answer requests by creating `results/<id>.json`. The control folder formats are in [docs/reference/control-spool.md](docs/reference/control-spool.md), generated from the models by `scripts/gen_reference.py`. Checks: `uv run ruff check`, `uv run pyright`, `uv run lint-imports`, `uv run pytest`.
 
 ## Deploy
-The app ships as one container image and runs as a single-replica Docker Swarm service behind an internal reverse proxy, with no published ports. Deploys are manual, with `docker service create` and `docker service update`. No CI/CD is attached. The steps are in [docs/how-to/deploy.md](docs/how-to/deploy.md), and the service is described in [deploy/mc-helper.yml](deploy/mc-helper.yml).
+The app ships as one container image and runs as a single-replica Docker Swarm service behind an internal reverse proxy, with no published ports. CI publishes `ghcr.io/mels0n/mc-helper:sha-<12>` on every push to `main` that changes the app, after the checks pass. Deploys are manual, with `docker service create` and `docker service update` using that tag; nothing deploys automatically. The steps are in [docs/how-to/deploy.md](docs/how-to/deploy.md), and the service is described in [deploy/mc-helper.yml](deploy/mc-helper.yml).
 
 ## Where secrets live
 Two Docker secrets, mounted as files: `mch_pin` (the family PIN) and `mch_session_secret` (signs the login cookie). The app reads them through `PIN_FILE` and `SESSION_SECRET_FILE`. Nothing else is secret, and no values are stored in this repository.

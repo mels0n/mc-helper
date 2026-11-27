@@ -1,7 +1,10 @@
 """Filesystem access to the shared control folder."""
 
 import contextlib
+import errno
+import logging
 import os
+import stat
 import time
 from pathlib import Path
 
@@ -10,19 +13,59 @@ from pydantic import ValidationError
 from mc_helper.entities import ActionResult, ControlRequest, ServerStatus, parse_request_id
 from mc_helper.shared.errors import ControlUnavailable, InvalidInput
 
+log = logging.getLogger(__name__)
+
 MAX_DOC_BYTES = 1_000_000
 RESULT_MAX_AGE_SECONDS = 24 * 3600
+TEMP_MAX_AGE_SECONDS = 3600
 SCAN_LIMIT = 200
+
+# Never follow a symlink and never block on a FIFO. The flags do not exist on every platform.
+_OPEN_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_NONBLOCK", 0)
+    | getattr(os, "O_BINARY", 0)
+)
 
 
 def _read_small(path: Path) -> bytes | None:
-    """File bytes, or None when missing, unreadable or oversized."""
+    """Bytes of a small regular file, or None when missing, unreadable, special or oversized."""
     try:
-        with path.open("rb") as handle:
+        fd = os.open(path, _OPEN_FLAGS)
+    except OSError as exc:
+        if exc.errno != errno.ENOENT:
+            log.warning("cannot open control file", extra={"file": path.name, "errno": exc.errno})
+        return None
+    try:
+        with os.fdopen(fd, "rb") as handle:
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                return None
             data = handle.read(MAX_DOC_BYTES + 1)
-    except OSError:
+    except OSError as exc:
+        log.warning("cannot read control file", extra={"file": path.name, "errno": exc.errno})
         return None
     return None if len(data) > MAX_DOC_BYTES else data
+
+
+def _regular_files(directory: Path, suffix: str | None) -> list[tuple[float, Path]]:
+    """(mtime, path) of regular, non-symlink entries. A bad entry is skipped, never fatal."""
+    found: list[tuple[float, Path]] = []
+    try:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                try:
+                    if suffix is not None and not entry.name.endswith(suffix):
+                        continue
+                    info = entry.stat(follow_symlinks=False)
+                    if stat.S_ISREG(info.st_mode):
+                        found.append((info.st_mtime, Path(entry.path)))
+                except OSError:
+                    continue
+    except OSError as exc:
+        if exc.errno != errno.ENOENT:
+            log.warning("cannot list control folder", extra={"dir": directory.name})
+    return found
 
 
 class ControlStore:
@@ -54,44 +97,51 @@ class ControlStore:
 
     def recent_results(self, limit: int) -> list[ActionResult]:
         """Newest results first, skipping files that are not valid result documents."""
-        try:
-            with os.scandir(self._results) as entries:
-                files = [
-                    (entry.stat().st_mtime, entry.name)
-                    for entry in entries
-                    if entry.name.endswith(".json") and not entry.name.startswith(".")
-                ]
-        except OSError:
-            return []
+        files = [
+            (mtime, path)
+            for mtime, path in _regular_files(self._results, ".json")
+            if not path.name.startswith(".")
+        ]
         files.sort(reverse=True)
         found: list[ActionResult] = []
-        for _, name in files[:SCAN_LIMIT]:
+        for _, path in files[:SCAN_LIMIT]:
             try:
-                stem = parse_request_id(name.removesuffix(".json"))
+                stem = parse_request_id(path.name.removesuffix(".json"))
             except InvalidInput:
                 continue
-            result = self._parse_result(self._results / name, stem)
+            result = self._parse_result(path, stem)
             if result is not None:
                 found.append(result)
                 if len(found) == limit:
                     break
         return found
 
-    def prune_results(self) -> None:
-        """Delete result files older than a day. Failures are ignored."""
-        cutoff = time.time() - RESULT_MAX_AGE_SECONDS
-        try:
-            with os.scandir(self._results) as entries:
-                old = [
-                    Path(entry.path)
-                    for entry in entries
-                    if entry.name.endswith(".json") and entry.stat().st_mtime < cutoff
-                ]
-        except OSError:
-            return
+    def prune(self) -> None:
+        """Delete result files older than a day and abandoned request temp files older than an hour.
+
+        A failure other than "already gone" is logged once per sweep.
+        """
+        now = time.time()
+        old = [
+            path
+            for mtime, path in _regular_files(self._results, ".json")
+            if now - mtime > RESULT_MAX_AGE_SECONDS
+        ]
+        old += [
+            path
+            for mtime, path in _regular_files(self._requests, None)
+            if path.name.startswith(".tmp-") and now - mtime > TEMP_MAX_AGE_SECONDS
+        ]
+        failed = 0
         for path in old:
-            with contextlib.suppress(OSError):
+            try:
                 path.unlink()
+            except FileNotFoundError:
+                continue
+            except OSError:
+                failed += 1
+        if failed:
+            log.warning("could not delete old control files", extra={"count": failed})
 
     def read_status(self) -> ServerStatus | None:
         data = _read_small(self._status)

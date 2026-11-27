@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import RedirectResponse, Response
 
+from mc_helper.api.middleware import apply_headers
 from mc_helper.api.pages import login_page, render
 from mc_helper.shared.errors import (
     ControlUnavailable,
@@ -15,8 +16,10 @@ from mc_helper.shared.errors import (
     InvalidInput,
     Locked,
     LoginRequired,
+    ServerNotResponding,
     WrongPin,
 )
+from mc_helper.shared.logging import new_request_id
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +45,8 @@ async def _domain_error(request: Request, exc: Exception) -> Response:
             return _error_page(request, 403, "Try again", exc.message)
         case InvalidInput():
             return _error_page(request, 400, "That did not work", exc.message)
+        case ServerNotResponding():
+            return _error_page(request, 503, "The server is busy", exc.message)
         case ControlUnavailable():
             return _error_page(request, 503, "Server controls are away", exc.message)
         case _:
@@ -63,8 +68,12 @@ async def _http_error(request: Request, exc: Exception) -> Response:
 
 
 async def _unexpected(request: Request, exc: Exception) -> Response:
-    log.error("unhandled error", exc_info=exc)
-    return _error_page(request, 500, "Oops", "Something went wrong. Tell Dad.")
+    # This handler runs outside the request middleware, so it applies the headers itself.
+    request_id = getattr(request.state, "request_id", None) or new_request_id()
+    log.error("unhandled error", exc_info=exc, extra={"request_id": request_id})
+    response = _error_page(request, 500, "Oops", "Something went wrong. Tell Dad.")
+    apply_headers(response, request_id, request.url.path)
+    return response
 
 
 def install_error_handlers(app: FastAPI) -> None:

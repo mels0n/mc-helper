@@ -33,5 +33,9 @@ class CsrfFailed(DomainError):
     """The form did not carry the token that belongs to the session."""
 
 
+class ServerNotResponding(DomainError):
+    """The status document is missing, malformed or stale, so no action is accepted."""
+
+
 class ControlUnavailable(DomainError):
     """The shared control folder could not be read or written."""

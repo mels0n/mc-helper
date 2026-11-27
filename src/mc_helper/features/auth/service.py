@@ -40,14 +40,16 @@ class AuthService:
 
     @staticmethod
     def check_csrf(session: Session, submitted: str | None) -> None:
-        if submitted is None or not hmac.compare_digest(submitted, session.csrf):
+        """Compare as bytes so a non-ASCII value fails the check instead of raising."""
+        if submitted is None or not hmac.compare_digest(
+            submitted.encode("utf-8"), session.csrf.encode("utf-8")
+        ):
             raise CsrfFailed("That page was too old. Go back and try again.")
 
     def login(self, bucket: str, pin: str) -> str:
         """Return a new signed-in cookie value, or raise Locked / WrongPin."""
-        self._limiter.check(bucket)
+        self._limiter.try_acquire(bucket)
         if not self._pin.verify(pin):
-            self._limiter.record_failure(bucket)
             log.warning("login failed", extra={"bucket": bucket})
             raise WrongPin("That PIN is not right.")
         self._limiter.record_success(bucket)

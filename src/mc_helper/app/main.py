@@ -38,7 +38,7 @@ def create_app(
     auth = AuthService(
         PinVerifier(settings.pin.get_secret_value()),
         LoginLimiter(settings.login_max_failures, settings.login_window_seconds),
-        SessionCodec(settings.session_secret.get_secret_value()),
+        SessionCodec(settings.session_secret.get_secret_value(), settings.pin.get_secret_value()),
         settings.session_days,
     )
 

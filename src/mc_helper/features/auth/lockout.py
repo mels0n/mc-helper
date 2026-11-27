@@ -33,22 +33,21 @@ class LoginLimiter:
             self._failures.pop(bucket, None)
         return recent
 
-    def check(self, bucket: str) -> None:
-        """Raise Locked while the bucket has used up its tries."""
-        with self._lock:
-            now = self._clock()
-            recent = self._recent(bucket, now)
-            if len(recent) >= self._max:
-                retry = math.ceil(recent[0] + self._window - now)
-                raise Locked(max(retry, 1))
+    def try_acquire(self, bucket: str) -> None:
+        """Raise Locked when the tries are used up; otherwise reserve one as a pending failure.
 
-    def record_failure(self, bucket: str) -> None:
+        The check and the reservation happen under one lock, before the PIN is hashed, so
+        parallel requests cannot all slip through. A correct PIN calls `record_success`,
+        which clears the bucket.
+        """
         with self._lock:
             now = self._clock()
             if len(self._failures) > SWEEP_ABOVE:
                 for key in list(self._failures):
                     self._recent(key, now)
-            self._recent(bucket, now)
+            recent = self._recent(bucket, now)
+            if len(recent) >= self._max:
+                raise Locked(max(math.ceil(recent[0] + self._window - now), 1))
             self._failures.setdefault(bucket, []).append(now)
 
     def record_success(self, bucket: str) -> None:

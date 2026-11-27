@@ -8,14 +8,15 @@ from starlette.responses import RedirectResponse, Response
 
 from mc_helper.api.deps import SESSION_COOKIE, Services, current_session, login_bucket, services
 from mc_helper.api.pages import login_page, render, set_session_cookie
-from mc_helper.api.views import activity_rows, ago, local_time, notice_for
-from mc_helper.entities import GAMERTAG_HINT, TIMES, Action, parse_request_id
+from mc_helper.api.views import activity_rows, ago, is_usable_name, local_time, notice_for
+from mc_helper.entities import GAMERTAG_HINT, TIMES, WEATHERS, Action, parse_request_id
 from mc_helper.features.auth import Session
 from mc_helper.shared.errors import CsrfFailed, InvalidInput
 
 router = APIRouter()
 
-WEATHER_BUTTONS = (("clear", "Clear"), ("rain", "Rain"), ("thunder", "Storm"))
+WEATHER_LABELS = {"clear": "Clear", "rain": "Rain", "thunder": "Storm"}
+WEATHER_BUTTONS = tuple((name, WEATHER_LABELS[name]) for name in WEATHERS)
 TIME_BUTTONS = tuple((name, name.capitalize()) for name in TIMES)
 
 Svc = Annotated[Services, Depends(services)]
@@ -29,7 +30,7 @@ Auth = Annotated[Session, Depends(signed_in)]
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
+async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
@@ -46,7 +47,7 @@ def login(
     request: Request,
     svc: Svc,
     pin: Annotated[str, Form(max_length=200)],
-    csrf: Annotated[str, Form(max_length=200)],
+    csrf: Annotated[str | None, Form(max_length=200)] = None,
 ) -> Response:
     session = current_session(request)
     if session is None:
@@ -63,7 +64,7 @@ def logout(
     request: Request,
     svc: Svc,
     session: Auth,
-    csrf: Annotated[str, Form(max_length=200)],
+    csrf: Annotated[str | None, Form(max_length=200)] = None,
 ) -> Response:
     svc.auth.check_csrf(session, csrf)
     response = RedirectResponse("/login", status_code=303)
@@ -73,8 +74,11 @@ def logout(
 
 @router.get("/")
 def home(request: Request, svc: Svc, session: Auth, r: str | None = None) -> Response:
+    svc.control.prune_if_due()
     now_state = svc.control.server_state()
     status = now_state.status
+    activity = svc.control.activity(20)
+    # Read after the activity scan: on a shared mount the scan refreshes the directory cache.
     notice = None
     check_id = None
     if r is not None:
@@ -96,7 +100,9 @@ def home(request: Request, svc: Svc, session: Auth, r: str | None = None) -> Res
             if status and status.last_backup
             else None
         ),
-        "activity": activity_rows(svc.control.activity(20), svc.timezone),
+        "activity": activity_rows(activity, svc.timezone),
+        "usable": is_usable_name,
+        "spawn_names": [n for n in status.online if is_usable_name(n)] if status else [],
         "time_buttons": TIME_BUTTONS,
         "weather_buttons": WEATHER_BUTTONS,
         "hint": GAMERTAG_HINT,
@@ -109,7 +115,7 @@ def do_action(
     action: Action,
     svc: Svc,
     session: Auth,
-    csrf: Annotated[str, Form(max_length=200)],
+    csrf: Annotated[str | None, Form(max_length=200)] = None,
     arg: Annotated[str | None, Form(max_length=200)] = None,
 ) -> Response:
     svc.auth.check_csrf(session, csrf)

@@ -71,6 +71,7 @@ def test_forged_forwarded_for_does_not_dodge_lockout(
 def test_login_without_session_is_csrf_failure(client: TestClient) -> None:
     response = client.post("/login", data={"pin": PIN, "csrf": "x"})
     assert response.status_code == 403
+    assert client.post("/login", data={"pin": PIN}).status_code == 403  # token missing
 
 
 def test_login_with_wrong_csrf_rejected(client: TestClient) -> None:
@@ -88,7 +89,7 @@ def test_posts_require_csrf_token(logged_in: tuple[TestClient, str], control_dir
         ("/logout", {"csrf": "forged"}),
     ]:
         response = client.post(path, data=data, follow_redirects=False)
-        assert response.status_code in (400, 403), path
+        assert response.status_code == 403, path
     assert list((control_dir / "requests").iterdir()) == []
     assert client.get("/").status_code == 200  # still logged in
 
@@ -129,7 +130,8 @@ def test_action_flow_failure_message(
 def test_action_flow_still_working(logged_in: tuple[TestClient, str]) -> None:
     client, csrf = logged_in
     response = client.post("/actions/restart", data={"csrf": csrf}, follow_redirects=True)
-    assert "Still working on it" in response.text
+    assert "Waiting for the server" in response.text
+    assert "do not press the button again" in response.text
     assert "Check again" in response.text
 
 
@@ -204,7 +206,9 @@ def test_hostile_result_message_is_escaped(
 def test_bad_result_id_in_query_is_ignored(logged_in: tuple[TestClient, str]) -> None:
     client, _ = logged_in
     for value in ["../../etc/passwd", "x", "%00", "7d0bb8c6"]:
-        assert client.get("/", params={"r": value}).status_code == 200
+        response = client.get("/", params={"r": value})
+        assert response.status_code == 200
+        assert 'id="result"' not in response.text  # no notice for a bad id
 
 
 def test_stale_status_shows_not_responding(

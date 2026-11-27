@@ -37,7 +37,9 @@ class Settings(BaseSettings):
     session_days: int = Field(default=7, ge=1, le=90)
     login_max_failures: int = Field(default=5, ge=1)
     login_window_seconds: int = Field(default=300, ge=1)
-    result_timeout_seconds: float = Field(default=30.0, ge=0)
+    # The reverse proxy gives up after 45 seconds (proxy_read_timeout in the shipped vhost), so
+    # an action must finish waiting well before that.
+    result_timeout_seconds: float = Field(default=30.0, ge=0, le=40)
     result_poll_seconds: float = Field(default=0.25, gt=0)
     status_max_age_seconds: int = Field(default=60, ge=1)
     requested_by: str = Field(default="mc-helper", pattern=r"^[A-Za-z0-9._-]{1,64}$")
