@@ -368,3 +368,19 @@ def test_non_regular_file_warns_once(control_dir: Path, caplog: pytest.LogCaptur
             assert store.read_status() is None
     levels = [r.levelname for r in caplog.records]
     assert levels.count("WARNING") == 1
+
+
+def test_warn_once_past_the_cap_logs_debug_and_stays_bounded(
+    control_dir: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    store_module._warned.clear()  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(store_module, "_MAX_WARNED", 1)
+    (control_dir / "status.json").mkdir()
+    (control_dir / "results" / "a.json").mkdir()
+    store = ControlStore(control_dir)
+    with caplog.at_level("DEBUG", logger=store_module.__name__):
+        assert store.read_status() is None  # first key: warns and fills the cap
+        caplog.clear()
+        assert store_module._read_small(control_dir / "results" / "a.json") is None  # pyright: ignore[reportPrivateUsage]
+    assert [r.levelname for r in caplog.records] == ["DEBUG"]
+    assert len(store_module._warned) == 1  # pyright: ignore[reportPrivateUsage]
