@@ -6,12 +6,8 @@ on:
     branches: [main]
     paths:
       - 'src/**'
-      - 'tests/**'
-      - 'scripts/**'
-      - 'docs/reference/**'
       - 'pyproject.toml'
       - 'uv.lock'
-      - '.importlinter'
       - 'Dockerfile'
       - '.dockerignore'
       - '.github/workflows/publish.yml'

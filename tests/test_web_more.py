@@ -1,4 +1,3 @@
-import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -138,9 +137,9 @@ def test_unhandled_error_still_carries_headers(
     client, _ = logged_in
     quiet = TestClient(client.app, raise_server_exceptions=False)
     quiet.cookies.update(client.cookies)
-    response = quiet.get("/")
+    response = quiet.get("/", headers={"X-Request-ID": "trace-abcd-1234"})
     assert response.status_code == 500
-    assert re.fullmatch(r"[0-9a-f]{32}", response.headers["x-request-id"])
+    assert response.headers["x-request-id"] == "trace-abcd-1234"
     assert "frame-ancestors" in response.headers["content-security-policy"]
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"

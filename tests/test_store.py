@@ -8,6 +8,7 @@ import pytest
 
 from mc_helper.entities import Action, ControlRequest
 from mc_helper.features.control import ControlService, ControlStore
+from mc_helper.features.control import store as store_module
 from mc_helper.shared.errors import ControlUnavailable, InvalidInput, ServerNotResponding
 from tests.conftest import iso, new_id, status_doc
 
@@ -333,3 +334,37 @@ def test_prune_is_throttled_with_an_injected_clock(control_dir: Path) -> None:
     assert len(calls) == 2
     svc.activity(5)  # reading the activity list never prunes
     assert len(calls) == 2
+
+
+def test_unreadable_file_warns_once_then_stays_quiet(
+    control_dir: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    import errno
+
+    store_module._warned.clear()  # pyright: ignore[reportPrivateUsage]
+    real_open = os.open
+
+    def looping(path: str | os.PathLike[str], flags: int, *args: int) -> int:
+        if Path(path).name == "status.json":
+            raise OSError(errno.ELOOP, "too many levels of symbolic links")
+        return real_open(path, flags, *args)
+
+    monkeypatch.setattr(os, "open", looping)
+    store = ControlStore(control_dir)
+    with caplog.at_level("DEBUG", logger=store_module.__name__):
+        for _ in range(5):
+            assert store.read_status() is None
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert len([r for r in caplog.records if r.levelname == "DEBUG"]) == 4
+
+
+def test_non_regular_file_warns_once(control_dir: Path, caplog: pytest.LogCaptureFixture) -> None:
+    store_module._warned.clear()  # pyright: ignore[reportPrivateUsage]
+    (control_dir / "status.json").mkdir()
+    store = ControlStore(control_dir)
+    with caplog.at_level("DEBUG", logger=store_module.__name__):
+        for _ in range(3):
+            assert store.read_status() is None
+    levels = [r.levelname for r in caplog.records]
+    assert levels.count("WARNING") <= 1

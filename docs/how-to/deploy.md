@@ -111,14 +111,37 @@ ssh.exe <manager> docker service update --with-registry-auth --image <image> mc-
 
 Roll back with `docker service rollback mc-helper`.
 
-## Change the PIN
+## Rotate the PIN or the session secret
 
-The session key is derived from the session secret and the PIN, so changing the PIN logs everyone out ([ADR 0006](../adr/0006-session-key-includes-pin.md)). Create the new secret under a new name, then swap it in under the old target name:
+A Swarm secret cannot be replaced in place, so rotate by creating a new, versioned secret and swapping it in under the same target name. The session key is derived from both secrets ([ADR 0006](../adr/0006-session-key-includes-pin.md)), so rotating either one logs everyone out.
+
+Find which secret is mounted now. The output shows each `SecretName` followed by the `Name` of the file it appears under in the container:
+
+```powershell
+ssh.exe <manager> "docker service inspect mc-helper | grep -E '\"(SecretName|Name)\"'"
+```
+
+The `SecretName` just before `"Name": "mch_pin"` is `<current-pin-secret>` (`mch_session_secret` for the session secret). Use a new version suffix every time, for example the date:
 
 ```powershell
 $pin = Read-Host "New PIN (4 or more ASCII characters)"
-$pin | ssh.exe <manager> docker secret create mch_pin_2 -
-ssh.exe <manager> docker service update --secret-rm mch_pin --secret-add source=mch_pin_2,target=mch_pin mc-helper
+$pin | ssh.exe <manager> docker secret create mch_pin_<version> -
+ssh.exe <manager> docker service update --with-registry-auth --secret-rm <current-pin-secret> --secret-add source=mch_pin_<version>,target=mch_pin mc-helper
+```
+
+For the session secret:
+
+```powershell
+$bytes = New-Object byte[] 48
+[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+[Convert]::ToBase64String($bytes) | ssh.exe <manager> docker secret create mch_session_secret_<version> -
+ssh.exe <manager> docker service update --with-registry-auth --secret-rm <current-session-secret> --secret-add source=mch_session_secret_<version>,target=mch_session_secret mc-helper
+```
+
+When `docker service ps mc-helper` shows the new task running and healthy, remove the old secret (it cannot be removed while a task still uses it):
+
+```powershell
+ssh.exe <manager> docker secret rm <current-pin-secret>
 ```
 
 ## Check it works

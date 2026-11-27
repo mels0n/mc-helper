@@ -29,21 +29,39 @@ _OPEN_FLAGS = (
 )
 
 
+_warned: set[str] = set()
+_MAX_WARNED = 1000
+
+
+def _warn_once(message: str, path: Path, err: int | None) -> None:
+    """Warn the first time a file fails to read; repeats are debug, so a bad file cannot flood."""
+    key = f"{message}:{path}"
+    first = key not in _warned
+    if first and len(_warned) < _MAX_WARNED:
+        _warned.add(key)
+    log.log(
+        logging.WARNING if first else logging.DEBUG,
+        message,
+        extra={"file": path.name, "errno": err},
+    )
+
+
 def _read_small(path: Path) -> bytes | None:
     """Bytes of a small regular file, or None when missing, unreadable, special or oversized."""
     try:
         fd = os.open(path, _OPEN_FLAGS)
     except OSError as exc:
         if exc.errno != errno.ENOENT:
-            log.warning("cannot open control file", extra={"file": path.name, "errno": exc.errno})
+            _warn_once("cannot open control file", path, exc.errno)
         return None
     try:
         with os.fdopen(fd, "rb") as handle:
             if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                _warn_once("control file is not a regular file", path, None)
                 return None
             data = handle.read(MAX_DOC_BYTES + 1)
     except OSError as exc:
-        log.warning("cannot read control file", extra={"file": path.name, "errno": exc.errno})
+        _warn_once("cannot read control file", path, exc.errno)
         return None
     return None if len(data) > MAX_DOC_BYTES else data
 
