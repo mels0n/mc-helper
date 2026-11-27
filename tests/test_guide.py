@@ -328,6 +328,7 @@ def test_guide_settings_rejections_name_the_field(
 def test_guide_settings_boundaries_are_accepted(
     make_settings: Callable[..., Settings], override: dict[str, object]
 ) -> None:
-    if "server_address" in override:
-        assert len(str(override["server_address"])) <= 253
+    address = str(override.get("server_address", ""))
+    if len(address) > 200:
+        assert len(address) == 253
     assert make_settings(**override)

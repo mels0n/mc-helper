@@ -35,12 +35,13 @@ def apply_headers(response: Response, request_id: str, path: str, versioned: boo
 
 
 def _current_version(request: Request, response: Response) -> bool:
-    """True only for a successful static response whose ?v= is the file's current hash."""
-    if response.status_code != 200 or not request.url.path.startswith("/static/"):
+    """True only for a 200 or 304 static response whose ?v= is the file's current hash."""
+    if response.status_code not in (200, 304) or not request.url.path.startswith("/static/"):
         return False
     versions = cast("dict[str, str]", getattr(request.app.state, "static_versions", {}))
     name = request.url.path.removeprefix("/static/")
-    return request.query_params.get("v") == versions.get(name)
+    version = request.query_params.get("v")
+    return version is not None and version == versions.get(name)
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):

@@ -80,3 +80,13 @@ def test_a_wrong_or_missing_file_version_is_not_cached_for_a_year(client: TestCl
     missing = client.get("/static/nope.css?v=abc")
     assert missing.status_code == 404
     assert "immutable" not in missing.headers.get("cache-control", "")
+
+
+def test_an_unversioned_path_outside_the_hash_map_is_not_cached_for_a_year(
+    client: TestClient,
+) -> None:
+    odd = client.get("/static/./app.css")
+    if odd.status_code == 200:
+        assert odd.headers["cache-control"] == "no-cache"
+    plain = client.get("/static/app.css")
+    assert plain.headers["cache-control"] == "no-cache"
