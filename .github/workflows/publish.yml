@@ -12,6 +12,9 @@ on:
       - '.dockerignore'
       - '.github/workflows/publish.yml'
       - '.github/workflows/standards.yml'
+  # Manual run: rebuild and publish the current main (for example after the first push of the
+  # repository, which does not trigger path-filtered workflows).
+  workflow_dispatch:
 
 permissions:
   contents: read
